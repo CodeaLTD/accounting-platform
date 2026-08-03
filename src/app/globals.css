@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  /* Lets the browser theme native controls (select, option, input, scrollbars)
+     to match light/dark mode on its own, instead of us hand-coloring them. */
+  color-scheme: light dark;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* Explicit override from the theme toggle button — takes precedence over
+   the system-preference media query above via attribute-selector specificity. */
+:root[data-theme="light"] {
+  --background: #ffffff;
+  --foreground: #171717;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* The closed select box (including the unselected placeholder) uses the
+   select's own color, so it follows the theme like the rest of the page.
+   But the open dropdown *list* keeps a native white background regardless
+   of theme in most browsers, so each option row is pinned to black —
+   otherwise dark mode's light --foreground text becomes unreadable on it. */
+select {
+  color: var(--foreground);
+}
+
+select option {
+  color: #171717;
+}
