@@ -137,17 +137,31 @@ export default function Home() {
 
   const hasInvalidValues = hasInvalidNumericValue(finalLines);
 
+  // The declaration table's columns are wide enough that a centered
+  // max-w-5xl box (right for the config/upload screen) leaves a large dead
+  // margin on the left once a table is showing. Widen the container to use
+  // most of the viewport only while a table is actually on screen; the
+  // config/upload-only state keeps the narrower centered layout.
+  const showingTable =
+    (view === "working" && workingLines) || view === "final";
+
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-8">
+    <main
+      className={
+        showingTable
+          ? "mx-auto flex w-full max-w-full flex-col gap-6 p-8"
+          : "mx-auto flex max-w-5xl flex-col gap-6 p-8"
+      }
+    >
       <ConfigForm value={configValue} onChange={setConfigValue} />
-      {view === "working" && (
-        <SearchBar value={searchQuery} onChange={setSearchQuery} />
-      )}
       <FileInput
         disabled={!isConfigComplete(configValue)}
         onFileSelected={handleFileSelected}
         onInvalidFileType={handleInvalidFileType}
       />
+      {view === "working" && (
+        <SearchBar value={searchQuery} onChange={setSearchQuery} />
+      )}
       <ErrorBanner message={error} />
       <button
         type="button"
@@ -168,40 +182,44 @@ export default function Home() {
           >
             {MESSAGES.labels.addAllButton}
           </button>
-          <DeclarationTable
-            lines={filteredWorkingLines}
-            onLineChange={handleWorkingLineChange}
-            showInvoiceNumber
-            renderRowAction={(index) => (
-              <button
-                type="button"
-                aria-label={`${MESSAGES.labels.addRowButton} ${index + 1}`}
-                onClick={() => handleAddRow(index)}
-                className="cursor-pointer text-green-600"
-              >
-                +
-              </button>
-            )}
-          />
+          <div className="overflow-x-auto">
+            <DeclarationTable
+              lines={filteredWorkingLines}
+              onLineChange={handleWorkingLineChange}
+              showInvoiceNumber
+              renderRowAction={(index) => (
+                <button
+                  type="button"
+                  aria-label={`${MESSAGES.labels.addRowButton} ${index + 1}`}
+                  onClick={() => handleAddRow(index)}
+                  className="cursor-pointer text-2xl font-bold leading-none text-green-600 hover:text-green-700"
+                >
+                  +
+                </button>
+              )}
+            />
+          </div>
         </>
       )}
       {view === "final" && (
         <>
-          <DeclarationTable
-            lines={finalLines}
-            onLineChange={handleFinalLineChange}
-            showInvoiceNumber={false}
-            renderRowAction={(index) => (
-              <button
-                type="button"
-                aria-label={`${MESSAGES.labels.removeRowButton} ${index + 1}`}
-                onClick={() => handleRemoveRow(index)}
-                className="cursor-pointer text-red-600"
-              >
-                −
-              </button>
-            )}
-          />
+          <div className="overflow-x-auto">
+            <DeclarationTable
+              lines={finalLines}
+              onLineChange={handleFinalLineChange}
+              showInvoiceNumber={false}
+              renderRowAction={(index) => (
+                <button
+                  type="button"
+                  aria-label={`${MESSAGES.labels.removeRowButton} ${index + 1}`}
+                  onClick={() => handleRemoveRow(index)}
+                  className="cursor-pointer text-2xl font-bold leading-none text-red-600 hover:text-red-700"
+                >
+                  −
+                </button>
+              )}
+            />
+          </div>
           <DownloadButton lines={finalLines} disabled={hasInvalidValues} />
           {hasInvalidValues && (
             <p role="alert" className="text-sm text-red-600">
