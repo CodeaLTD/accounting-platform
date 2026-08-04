@@ -58,7 +58,8 @@ export function mapInvoiceLineToIntrastat(
     transportNationality: TRANSPORT_NATIONALITY,
     regionOfConsumption: profile.regionOfConsumption,
     netWeightKg: roundTo(line.unitNetWeightKg * line.invoicedQuantity, 3),
-    supplementaryQuantity: null,
+    // Blank by default — the accountant fills it in manually when needed.
+    supplementaryQuantity: NaN,
     value: Math.round(line.unitNetPrice * line.invoicedQuantity),
     statisticalValue: Math.round(line.unitNetPrice * line.invoicedQuantity),
   };

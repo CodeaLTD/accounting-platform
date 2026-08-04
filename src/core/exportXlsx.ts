@@ -55,8 +55,9 @@ function lineToRow(line: IntrastatDeclarationLine): (string | number)[] {
     line.transportNationality,
     line.regionOfConsumption,
     line.netWeightKg,
-    // Always empty per the accountant's submission process — see types.ts.
-    "",
+    // Blank (not 0) when the accountant hasn't entered a value — see
+    // types.ts and DeclarationTable.tsx for why NaN represents "blank".
+    Number.isNaN(line.supplementaryQuantity) ? "" : line.supplementaryQuantity,
     line.value,
     line.statisticalValue,
   ];

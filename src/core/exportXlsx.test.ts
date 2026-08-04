@@ -20,7 +20,7 @@ const sampleLines: IntrastatDeclarationLine[] = [
     transportNationality: "BG",
     regionOfConsumption: "SZR",
     netWeightKg: 15,
-    supplementaryQuantity: null,
+    supplementaryQuantity: NaN,
     value: 560,
     statisticalValue: 560,
   },
@@ -36,7 +36,7 @@ const sampleLines: IntrastatDeclarationLine[] = [
     transportNationality: "BG",
     regionOfConsumption: "SZR",
     netWeightKg: 0.085,
-    supplementaryQuantity: null,
+    supplementaryQuantity: NaN,
     value: 68,
     statisticalValue: 68,
   },
@@ -105,6 +105,16 @@ describe("buildIntrastatWorkbook", () => {
       68,
       68,
     ]);
+  });
+
+  it("exports a real supplementary quantity value when the accountant has entered one", () => {
+    const linesWithSupplementaryQuantity: IntrastatDeclarationLine[] = [
+      { ...sampleLines[0], supplementaryQuantity: 12 },
+    ];
+    const rows = readBack(
+      buildIntrastatWorkbook(linesWithSupplementaryQuantity),
+    );
+    expect(rows[1][10]).toBe(12);
   });
 
   it("appends a totals row summing net weight, value, and statistical value", () => {

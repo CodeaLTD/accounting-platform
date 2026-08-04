@@ -315,16 +315,22 @@ export function DeclarationTable({
                     }
                   />
                 </div>
-                {/* Supplementary quantity: always empty, not editable —
-                    locked by the type system
-                    (IntrastatDeclarationLine.supplementaryQuantity is a
-                    literal `null`) per the accountant's submission
-                    process. */}
-                <div
-                  role="cell"
-                  className="border px-1"
-                  aria-label={`${HEADER_ROW[10]} row ${index + 1}`}
-                />
+                <div role="cell" className="border px-1 min-w-0">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className="w-full"
+                    aria-label={`${HEADER_ROW[10]} row ${index + 1}`}
+                    value={formatDecimal(line.supplementaryQuantity)}
+                    onChange={(e) =>
+                      onLineChange(index, {
+                        supplementaryQuantity: parseNumericInput(
+                          e.target.value,
+                        ),
+                      })
+                    }
+                  />
+                </div>
                 <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"

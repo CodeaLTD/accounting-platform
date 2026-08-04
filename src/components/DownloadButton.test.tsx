@@ -27,7 +27,7 @@ const sampleLines: IntrastatDeclarationLine[] = [
     transportNationality: "BG",
     regionOfConsumption: "SZR",
     netWeightKg: 15,
-    supplementaryQuantity: null,
+    supplementaryQuantity: NaN,
     value: 560,
     statisticalValue: 560,
   },

@@ -64,8 +64,10 @@ export interface IntrastatDeclarationLine {
   transportNationality: string;
   regionOfConsumption: string;
   netWeightKg: number;
-  /** Always null — must stay empty per the accountant's submission process. */
-  supplementaryQuantity: null;
+  /** Blank by default (represented as NaN, like the other numeric fields —
+   * see DeclarationTable.tsx); editable, since the accountant only needs to
+   * fill it in for the small subset of commodity codes that require it. */
+  supplementaryQuantity: number;
   /** EUR, since Bulgaria adopted the euro — see project memory */
   value: number;
   /** EUR */

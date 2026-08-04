@@ -15,7 +15,7 @@ const sampleLines: WorkingLine[] = [
     transportNationality: "BG",
     regionOfConsumption: "SZR",
     netWeightKg: 15,
-    supplementaryQuantity: null,
+    supplementaryQuantity: NaN,
     value: 560,
     statisticalValue: 560,
     invoiceNumber: "INV-001",
@@ -76,6 +76,43 @@ describe("DeclarationTable", () => {
     fireEvent.change(netWeightInput, { target: { value: "" } });
 
     expect(onLineChange).toHaveBeenCalledWith(0, { netWeightKg: NaN });
+  });
+
+  it("renders the supplementary quantity cell as an editable input, blank by default", () => {
+    render(
+      <DeclarationTable
+        lines={sampleLines}
+        onLineChange={vi.fn()}
+        showInvoiceNumber={false}
+        renderRowAction={() => null}
+      />,
+    );
+    expect(
+      screen.getByLabelText("Количество по допълнителна мярка row 1"),
+    ).toHaveValue("");
+  });
+
+  it("allows entering a supplementary quantity value", () => {
+    const onLineChange = vi.fn();
+    render(
+      <DeclarationTable
+        lines={sampleLines}
+        onLineChange={onLineChange}
+        showInvoiceNumber={false}
+        renderRowAction={() => null}
+      />,
+    );
+
+    const supplementaryQuantityInput = screen.getByLabelText(
+      "Количество по допълнителна мярка row 1",
+    ) as HTMLInputElement;
+    fireEvent.change(supplementaryQuantityInput, {
+      target: { value: "12" },
+    });
+
+    expect(onLineChange).toHaveBeenCalledWith(0, {
+      supplementaryQuantity: 12,
+    });
   });
 
   it("shows the invoice number column when showInvoiceNumber is true", () => {
