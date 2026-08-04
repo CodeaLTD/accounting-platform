@@ -190,44 +190,40 @@ export default function Home() {
           >
             {MESSAGES.labels.addAllButton}
           </button>
-          <div className="overflow-x-auto">
-            <DeclarationTable
-              lines={filteredWorkingLines}
-              onLineChange={handleWorkingLineChange}
-              showInvoiceNumber
-              renderRowAction={(index) => (
-                <button
-                  type="button"
-                  aria-label={`${MESSAGES.labels.addRowButton} ${index + 1}`}
-                  onClick={() => handleAddRow(index)}
-                  className="cursor-pointer text-2xl font-bold leading-none text-green-600 hover:text-green-700"
-                >
-                  +
-                </button>
-              )}
-            />
-          </div>
+          <DeclarationTable
+            lines={filteredWorkingLines}
+            onLineChange={handleWorkingLineChange}
+            showInvoiceNumber
+            renderRowAction={(index) => (
+              <button
+                type="button"
+                aria-label={`${MESSAGES.labels.addRowButton} ${index + 1}`}
+                onClick={() => handleAddRow(index)}
+                className="cursor-pointer text-2xl font-bold leading-none text-green-600 hover:text-green-700"
+              >
+                +
+              </button>
+            )}
+          />
         </>
       )}
       {view === "final" && (
         <>
-          <div className="overflow-x-auto">
-            <DeclarationTable
-              lines={finalLines}
-              onLineChange={handleFinalLineChange}
-              showInvoiceNumber={false}
-              renderRowAction={(index) => (
-                <button
-                  type="button"
-                  aria-label={`${MESSAGES.labels.removeRowButton} ${index + 1}`}
-                  onClick={() => handleRemoveRow(index)}
-                  className="cursor-pointer text-2xl font-bold leading-none text-red-600 hover:text-red-700"
-                >
-                  −
-                </button>
-              )}
-            />
-          </div>
+          <DeclarationTable
+            lines={finalLines}
+            onLineChange={handleFinalLineChange}
+            showInvoiceNumber={false}
+            renderRowAction={(index) => (
+              <button
+                type="button"
+                aria-label={`${MESSAGES.labels.removeRowButton} ${index + 1}`}
+                onClick={() => handleRemoveRow(index)}
+                className="cursor-pointer text-2xl font-bold leading-none text-red-600 hover:text-red-700"
+              >
+                −
+              </button>
+            )}
+          />
           <DownloadButton lines={finalLines} disabled={hasInvalidValues} />
           {hasInvalidValues && (
             <p role="alert" className="text-sm text-red-600">

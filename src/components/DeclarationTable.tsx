@@ -106,51 +106,59 @@ export function DeclarationTable({
     overscan: 10,
   });
 
+  // Header and footer are pinned via `position: sticky` inside the SAME
+  // scroll container as the virtualized rows, rather than living outside
+  // it as separate elements. A sticky element only pins along the axis
+  // given (here just top/bottom), so it keeps scrolling horizontally in
+  // perfect lockstep with the body — there's exactly one scrolling box for
+  // both axes, so there's no second container whose content width can
+  // drift out of sync with the first (which is what caused a small
+  // independent horizontal scroll to reappear once the vertical
+  // scrollbar's width ate into a separate inner container's content box).
   return (
-    <div
-      role="table"
-      aria-rowcount={lines.length + 1}
-      className="text-sm"
-      style={{ width: totalWidth }}
-    >
-      <div role="rowgroup">
-        <div
-          role="row"
-          aria-rowindex={1}
-          className="grid border-b font-bold"
-          style={{ gridTemplateColumns }}
-        >
-          <div role="columnheader" className="border px-2 py-1" />
-          {showInvoiceNumber && (
-            <div role="columnheader" className="border px-2 py-1 text-left">
-              {MESSAGES.labels.invoiceNumberColumn}
-            </div>
-          )}
-          {HEADER_ROW.map((label) => (
+    <div role="table" aria-rowcount={lines.length + 1} className="text-sm">
+      <div ref={scrollRef} className="max-h-[65vh] overflow-auto">
+        <div style={{ width: totalWidth }}>
+          <div
+            role="rowgroup"
+            className="sticky top-0 z-10"
+            style={{ backgroundColor: "var(--background)" }}
+          >
             <div
-              key={label}
-              role="columnheader"
-              className="border px-2 py-1 text-left"
+              role="row"
+              aria-rowindex={1}
+              className="grid border-b font-bold"
+              style={{ gridTemplateColumns }}
             >
-              {label}
+              <div role="columnheader" className="border px-2 py-1" />
+              {showInvoiceNumber && (
+                <div
+                  role="columnheader"
+                  className="border px-2 py-1 text-left"
+                >
+                  {MESSAGES.labels.invoiceNumberColumn}
+                </div>
+              )}
+              {HEADER_ROW.map((label) => (
+                <div
+                  key={label}
+                  role="columnheader"
+                  className="border px-2 py-1 text-left"
+                >
+                  {label}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      <div
-        ref={scrollRef}
-        className="max-h-[65vh] overflow-y-auto"
-        style={{ scrollbarGutter: "stable" }}
-      >
-        <div
-          role="rowgroup"
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            position: "relative",
-          }}
-        >
-          {virtualizer.getVirtualItems().map((virtualRow) => {
+          <div
+            role="rowgroup"
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              position: "relative",
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
             const index = virtualRow.index;
             const line = lines[index];
             return (
@@ -345,30 +353,35 @@ export function DeclarationTable({
                 </div>
               </div>
             );
-          })}
-        </div>
-      </div>
+            })}
+          </div>
 
-      <div role="rowgroup">
-        <div
-          role="row"
-          className="grid border-t font-bold"
-          style={{ gridTemplateColumns }}
-        >
           <div
-            role="cell"
-            className="border px-1"
-            style={{ gridColumn: `span ${leadingColSpan}` }}
-          />
-          <div role="cell" className="border px-1">
-            {formatTotal(totals.netWeightKg, 3)}
-          </div>
-          <div role="cell" className="border px-1" />
-          <div role="cell" className="border px-1">
-            {formatTotal(totals.value, 2)}
-          </div>
-          <div role="cell" className="border px-1">
-            {formatTotal(totals.statisticalValue, 2)}
+            role="rowgroup"
+            className="sticky bottom-0 z-10"
+            style={{ backgroundColor: "var(--background)" }}
+          >
+            <div
+              role="row"
+              className="grid border-t font-bold"
+              style={{ gridTemplateColumns }}
+            >
+              <div
+                role="cell"
+                className="border px-1"
+                style={{ gridColumn: `span ${leadingColSpan}` }}
+              />
+              <div role="cell" className="border px-1">
+                {formatTotal(totals.netWeightKg, 3)}
+              </div>
+              <div role="cell" className="border px-1" />
+              <div role="cell" className="border px-1">
+                {formatTotal(totals.value, 2)}
+              </div>
+              <div role="cell" className="border px-1">
+                {formatTotal(totals.statisticalValue, 2)}
+              </div>
+            </div>
           </div>
         </div>
       </div>
