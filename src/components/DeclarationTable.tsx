@@ -106,28 +106,22 @@ export function DeclarationTable({
     overscan: 10,
   });
 
-  // Header and footer are pinned via `position: sticky` inside the SAME
-  // scroll container as the virtualized rows, rather than living outside
-  // it as separate elements. A sticky element only pins along the axis
-  // given (here just top/bottom), so it keeps scrolling horizontally in
-  // perfect lockstep with the body — there's exactly one scrolling box for
-  // both axes, so there's no second container whose content width can
-  // drift out of sync with the first (which is what caused a small
-  // independent horizontal scroll to reappear once the vertical
-  // scrollbar's width ate into a separate inner container's content box).
+  // Horizontal scrolling (when the table is wider than the available
+  // space) is owned by exactly one element — the outer wrapper spanning
+  // header, body, and footer together — so all three can never drift out
+  // of column alignment with each other. Vertical scrolling (when there
+  // are more rows than fit) is scoped to just the body rowgroup, not the
+  // header/footer's own height, so a table whose rows alone fit within the
+  // height cap never shows a scrollbar just because the header/footer add
+  // a little extra height on top.
   return (
     <div role="table" aria-rowcount={lines.length + 1} className="text-sm">
       <div
-        ref={scrollRef}
-        className="max-h-[65vh] overflow-auto"
+        className="overflow-x-auto overflow-y-visible"
         style={{ maxWidth: totalWidth }}
       >
         <div style={{ width: totalWidth }}>
-          <div
-            role="rowgroup"
-            className="sticky top-0 z-10"
-            style={{ backgroundColor: "var(--background)" }}
-          >
+          <div role="rowgroup">
             <div
               role="row"
               aria-rowindex={1}
@@ -156,13 +150,17 @@ export function DeclarationTable({
           </div>
 
           <div
-            role="rowgroup"
-            style={{
-              height: `${virtualizer.getTotalSize()}px`,
-              position: "relative",
-            }}
+            ref={scrollRef}
+            className="max-h-[65vh] overflow-y-auto overflow-x-hidden"
           >
-            {virtualizer.getVirtualItems().map((virtualRow) => {
+            <div
+              role="rowgroup"
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                position: "relative",
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
             const index = virtualRow.index;
             const line = lines[index];
             return (
@@ -356,15 +354,12 @@ export function DeclarationTable({
                   />
                 </div>
               </div>
-            );
-            })}
+              );
+              })}
+            </div>
           </div>
 
-          <div
-            role="rowgroup"
-            className="sticky bottom-0 z-10"
-            style={{ backgroundColor: "var(--background)" }}
-          >
+          <div role="rowgroup">
             <div
               role="row"
               className="grid border-t font-bold"
