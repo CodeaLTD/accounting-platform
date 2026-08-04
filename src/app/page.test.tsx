@@ -471,6 +471,62 @@ describe("Home page", () => {
     );
   });
 
+  it("restores every NAP row back to the working table via 'remove all'", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+    await fillConfig(user);
+
+    await user.upload(
+      screen.getByLabelText(MESSAGES.labels.fileInput),
+      buildMultiInvoiceFile(),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText("Код на стоката row 1")).toHaveValue(
+        "90011000",
+      );
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: MESSAGES.labels.addAllButton }),
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: MESSAGES.labels.viewFinalTableButton,
+      }),
+    );
+    expect(screen.getByLabelText("Код на стоката row 1")).toHaveValue(
+      "90011000",
+    );
+
+    const removeAllButton = screen.getByRole("button", {
+      name: MESSAGES.labels.removeAllButton,
+    });
+    expect(removeAllButton).toBeEnabled();
+    await user.click(removeAllButton);
+
+    expect(
+      screen.queryByLabelText("Код на стоката row 1"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: MESSAGES.labels.downloadButton }),
+    ).toBeDisabled();
+    expect(removeAllButton).toBeDisabled();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: MESSAGES.labels.viewWorkingTableButton,
+      }),
+    );
+
+    expect(screen.getByLabelText("Код на стоката row 1")).toHaveValue(
+      "90011000",
+    );
+    expect(screen.getByLabelText("Код на стоката row 3")).toHaveValue(
+      "90013000",
+    );
+  });
+
   it("asks for confirmation before replacing unadded working rows with a new upload", async () => {
     const user = userEvent.setup();
     const confirmSpy = vi.spyOn(window, "confirm");

@@ -143,6 +143,14 @@ export default function Home() {
     setFinalLines((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function handleRemoveAllRows() {
+    if (finalLines.length === 0) return;
+    setWorkingLines((prev) =>
+      prev ? [...finalLines, ...prev] : [...finalLines],
+    );
+    setFinalLines([]);
+  }
+
   const hasInvalidValues = hasInvalidNumericValue(finalLines);
 
   // The declaration table's columns are wide enough that a centered
@@ -209,6 +217,14 @@ export default function Home() {
       )}
       {view === "final" && (
         <>
+          <button
+            type="button"
+            onClick={handleRemoveAllRows}
+            disabled={finalLines.length === 0}
+            className="self-start cursor-pointer rounded-md bg-red-600 px-4 py-2 text-white disabled:opacity-50"
+          >
+            {MESSAGES.labels.removeAllButton}
+          </button>
           <DeclarationTable
             lines={finalLines}
             onLineChange={handleFinalLineChange}

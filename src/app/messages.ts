@@ -22,6 +22,7 @@ export const MESSAGES = {
     addAllButton: "Добави всички",
     addRowButton: "Добави ред",
     removeRowButton: "Премахни ред",
+    removeAllButton: "Премахни всички",
     viewFinalTableButton: "виж НАП таблицата",
     viewWorkingTableButton: "виж работната таблица",
   },
