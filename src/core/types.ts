@@ -71,3 +71,11 @@ export interface IntrastatDeclarationLine {
   /** EUR */
   statisticalValue: number;
 }
+
+// UI-only composition: a mapped declaration line paired with its source
+// invoice number, used by the working/final tables for display and search.
+// The invoice number is never part of the exported .xlsx (see exportXlsx.ts)
+// and duplicates are expected (multiple line items can share one invoice).
+export interface WorkingLine extends IntrastatDeclarationLine {
+  invoiceNumber: string;
+}
