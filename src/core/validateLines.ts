@@ -1,7 +1,7 @@
 import type { IntrastatDeclarationLine } from "./types";
 
 // Numeric fields the accountant edits directly in the review table. A blank
-// cell is stored as NaN (see ReviewTable.tsx) rather than being coerced to 0,
+// cell is stored as NaN (see DeclarationTable.tsx) rather than being coerced to 0,
 // so we must scan for that before allowing an export — an exported `<v>NaN</v>`
 // would make Excel flag the file as needing repair.
 const NUMERIC_FIELDS = [

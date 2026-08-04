@@ -45,10 +45,13 @@ export default function Home() {
       const sourceLines = parseSourceInvoiceWorkbook(buffer);
       if (sourceLines.length === 0) {
         setError(MESSAGES.errors.emptyFile);
-        setWorkingLines(null);
         return;
       }
       const mapped = mapInvoiceLinesToDeclaration(sourceLines, configValue);
+      // Relies on mapInvoiceLinesToDeclaration returning a 1:1,
+      // order-preserving mapping of sourceLines (a bare .map with no
+      // filtering) — if that ever changes, this zip by index would
+      // silently misalign invoice numbers with their lines.
       const nextWorkingLines: WorkingLine[] = mapped.map((line, i) => ({
         ...line,
         invoiceNumber: sourceLines[i].invoiceNumber,
@@ -60,13 +63,11 @@ export default function Home() {
     } catch (err) {
       console.error(err);
       setError(MESSAGES.errors.unrecognizedStructure);
-      setWorkingLines(null);
     }
   }
 
   function handleInvalidFileType() {
     setError(MESSAGES.errors.invalidFileType);
-    setWorkingLines(null);
   }
 
   function toggleView() {

@@ -68,10 +68,7 @@ const SOURCE_HEADER = [
   "Custom Code",
 ];
 
-function buildXlsxFile(
-  rows: (string | number)[][],
-  fileName: string,
-): File {
+function buildXlsxFile(rows: (string | number)[][], fileName: string): File {
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, sheet, "Sheet1");
@@ -156,6 +153,23 @@ function buildMultiInvoiceFile(): File {
   return buildXlsxFile(rows, "multi-invoice.xlsx");
 }
 
+// A second, distinct file (different commodity codes/invoice numbers from
+// buildMultiInvoiceFile) used to test that the NAP table accumulates rows
+// from two separate uploads rather than being replaced by the second one.
+function buildSecondInvoiceFile(): File {
+  const rows: (string | number)[][] = [
+    SOURCE_HEADER,
+    buildSourceRow({
+      invoiceNumber: "INV-9",
+      customsCode: "90019000 - 0000",
+      unitNetWeightKg: 2,
+      invoicedQuantity: 3,
+      unitNetPrice: 20,
+    }),
+  ];
+  return buildXlsxFile(rows, "second-invoice.xlsx");
+}
+
 async function fillConfig(user: ReturnType<typeof userEvent.setup>) {
   await user.selectOptions(
     screen.getByLabelText(MESSAGES.labels.partnerCountry),
@@ -176,9 +190,7 @@ describe("Home page", () => {
 
   beforeEach(() => {
     capturedBlob = null;
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
-      () => {},
-    );
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     URL.createObjectURL = vi.fn((blob: Blob) => {
       capturedBlob = blob;
       return "blob:mock-url";
@@ -237,7 +249,10 @@ describe("Home page", () => {
     await fillConfig(user);
 
     const malformedFile = buildXlsxFile(
-      [["Not", "The", "Right", "Columns"], ["a", "b", "c", "d"]],
+      [
+        ["Not", "The", "Right", "Columns"],
+        ["a", "b", "c", "d"],
+      ],
       "malformed.xlsx",
     );
     await user.upload(
@@ -547,6 +562,185 @@ describe("Home page", () => {
 
     expect(
       screen.queryByLabelText(MESSAGES.labels.searchInput),
+    ).not.toBeInTheDocument();
+  });
+
+  it("preserves the working table when an invalid file type is selected afterwards", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    render(<Home />);
+    await fillConfig(user);
+
+    await user.upload(
+      screen.getByLabelText(MESSAGES.labels.fileInput),
+      buildMultiInvoiceFile(),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText("Код на стоката row 1")).toHaveValue(
+        "90011000",
+      );
+    });
+
+    const badFile = new File(["not excel"], "notes.txt", {
+      type: "text/plain",
+    });
+    await user.upload(
+      screen.getByLabelText(MESSAGES.labels.fileInput),
+      badFile,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      MESSAGES.errors.invalidFileType,
+    );
+    // The working table rows from the earlier valid upload must still be
+    // there, unchanged — an invalid file selection must not destroy
+    // unrecoverable working-table state (manual edits, restored rows).
+    expect(screen.getByLabelText("Код на стоката row 1")).toHaveValue(
+      "90011000",
+    );
+    expect(screen.getByLabelText("Код на стоката row 2")).toHaveValue(
+      "90012000",
+    );
+    expect(screen.getByLabelText("Код на стоката row 3")).toHaveValue(
+      "90013000",
+    );
+  });
+
+  it("accumulates rows from two separate uploads into the NAP table", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+    await fillConfig(user);
+
+    await user.upload(
+      screen.getByLabelText(MESSAGES.labels.fileInput),
+      buildMultiInvoiceFile(),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText("Код на стоката row 1")).toHaveValue(
+        "90011000",
+      );
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: MESSAGES.labels.addAllButton }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.queryByLabelText("Код на стоката row 1"),
+      ).not.toBeInTheDocument();
+    });
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    await user.upload(
+      screen.getByLabelText(MESSAGES.labels.fileInput),
+      buildSecondInvoiceFile(),
+    );
+    expect(confirmSpy).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByLabelText("Код на стоката row 1")).toHaveValue(
+        "90019000",
+      );
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: MESSAGES.labels.addAllButton }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.queryByLabelText("Код на стоката row 1"),
+      ).not.toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole("button", {
+        name: MESSAGES.labels.viewFinalTableButton,
+      }),
+    );
+
+    // Rows from both uploads must coexist in the accumulated NAP table.
+    const finalCodes = [
+      screen.getByLabelText("Код на стоката row 1"),
+      screen.getByLabelText("Код на стоката row 2"),
+      screen.getByLabelText("Код на стоката row 3"),
+      screen.getByLabelText("Код на стоката row 4"),
+    ].map((el) => (el as HTMLInputElement).value);
+    expect(finalCodes).toEqual(
+      expect.arrayContaining(["90011000", "90012000", "90013000", "90019000"]),
+    );
+    expect(
+      screen.queryByLabelText("Код на стоката row 5"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows zero working rows and disables 'add all' when a search matches nothing", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+    await fillConfig(user);
+
+    await user.upload(
+      screen.getByLabelText(MESSAGES.labels.fileInput),
+      buildMultiInvoiceFile(),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText("Код на стоката row 1")).toHaveValue(
+        "90011000",
+      );
+    });
+
+    await user.type(
+      screen.getByLabelText(MESSAGES.labels.searchInput),
+      "NO-SUCH-INVOICE",
+    );
+
+    expect(
+      screen.queryByLabelText("Код на стоката row 1"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: MESSAGES.labels.addAllButton }),
+    ).toBeDisabled();
+  });
+
+  it("moves every working row to the NAP table when 'add all' is clicked with no active search filter", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+    await fillConfig(user);
+
+    await user.upload(
+      screen.getByLabelText(MESSAGES.labels.fileInput),
+      buildMultiInvoiceFile(),
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText("Код на стоката row 1")).toHaveValue(
+        "90011000",
+      );
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: MESSAGES.labels.addAllButton }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByLabelText("Код на стоката row 1"),
+      ).not.toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole("button", {
+        name: MESSAGES.labels.viewFinalTableButton,
+      }),
+    );
+
+    expect(screen.getByLabelText("Код на стоката row 1")).toHaveValue(
+      "90011000",
+    );
+    expect(screen.getByLabelText("Код на стоката row 2")).toHaveValue(
+      "90012000",
+    );
+    expect(screen.getByLabelText("Код на стоката row 3")).toHaveValue(
+      "90013000",
+    );
+    expect(
+      screen.queryByLabelText("Код на стоката row 4"),
     ).not.toBeInTheDocument();
   });
 });
