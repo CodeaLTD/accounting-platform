@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ConfigForm,
   EMPTY_CONFIG_FORM_VALUE,
@@ -74,20 +74,28 @@ export default function Home() {
     setView((v) => (v === "working" ? "final" : "working"));
   }
 
-  // Indices into `workingLines` currently matching the search query, kept
-  // as indices (not a sliced copy) so add-single/add-all can map a display
-  // position in the filtered table back to the real position in
-  // `workingLines` for state updates.
-  const filteredIndices = workingLines
-    ? workingLines
-        .map((_, i) => i)
-        .filter((i) =>
-          workingLines[i].invoiceNumber
-            .toLowerCase()
-            .includes(searchQuery.trim().toLowerCase()),
-        )
-    : [];
-  const filteredWorkingLines = filteredIndices.map((i) => workingLines![i]);
+  // Recomputing this by scanning workingLines on every render — including
+  // every keystroke in any single cell's edit, since an edit produces a
+  // new workingLines array reference — is wasted work once a file has a
+  // few thousand rows. Only actually needs to change when the data or the
+  // search query changes.
+  const filteredIndices = useMemo(
+    () =>
+      workingLines
+        ? workingLines
+            .map((_, i) => i)
+            .filter((i) =>
+              workingLines[i].invoiceNumber
+                .toLowerCase()
+                .includes(searchQuery.trim().toLowerCase()),
+            )
+        : [],
+    [workingLines, searchQuery],
+  );
+  const filteredWorkingLines = useMemo(
+    () => filteredIndices.map((i) => workingLines![i]),
+    [filteredIndices, workingLines],
+  );
 
   function handleWorkingLineChange(
     displayIndex: number,
