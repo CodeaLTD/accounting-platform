@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type ReactNode } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { HEADER_ROW, computeTotals } from "@/core/exportXlsx";
 import type { PartnerCountry, TransportMode } from "@/core/constants";
@@ -76,7 +76,7 @@ export function DeclarationTable({
     return value.toLocaleString("bg-BG", { maximumFractionDigits: 3 });
   }
 
-  const totals = computeTotals(lines);
+  const totals = useMemo(() => computeTotals(lines), [lines]);
 
   // Summing floats leaves stray trailing digits (e.g. 45.56700000000001).
   // Round to the same precision the accountant enters before formatting, so
@@ -97,6 +97,7 @@ export function DeclarationTable({
     ...DATA_COLUMN_WIDTHS,
   ];
   const gridTemplateColumns = columnWidths.map((w) => `${w}px`).join(" ");
+  const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
 
   const virtualizer = useVirtualizer({
     count: lines.length,
@@ -106,10 +107,16 @@ export function DeclarationTable({
   });
 
   return (
-    <div role="table" className="w-full text-sm">
+    <div
+      role="table"
+      aria-rowcount={lines.length + 1}
+      className="text-sm"
+      style={{ width: totalWidth }}
+    >
       <div role="rowgroup">
         <div
           role="row"
+          aria-rowindex={1}
           className="grid border-b font-bold"
           style={{ gridTemplateColumns }}
         >
@@ -131,12 +138,9 @@ export function DeclarationTable({
         </div>
       </div>
 
-      <div
-        ref={scrollRef}
-        role="rowgroup"
-        className="max-h-[65vh] overflow-y-auto"
-      >
+      <div ref={scrollRef} className="max-h-[65vh] overflow-y-auto">
         <div
+          role="rowgroup"
           style={{
             height: `${virtualizer.getTotalSize()}px`,
             position: "relative",
@@ -149,13 +153,14 @@ export function DeclarationTable({
               <div
                 key={index}
                 role="row"
+                aria-rowindex={index + 2}
                 className="grid border-b"
                 style={{
                   gridTemplateColumns,
                   position: "absolute",
                   top: 0,
                   left: 0,
-                  width: "100%",
+                  width: totalWidth,
                   height: `${virtualRow.size}px`,
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
@@ -181,9 +186,10 @@ export function DeclarationTable({
                   className="border px-1"
                   aria-label={`${HEADER_ROW[0]} row ${index + 1}`}
                 />
-                <div role="cell" className="border px-1">
+                <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
+                    className="w-full"
                     aria-label={`${HEADER_ROW[1]} row ${index + 1}`}
                     value={line.commodityCode}
                     onChange={(e) =>
@@ -191,9 +197,10 @@ export function DeclarationTable({
                     }
                   />
                 </div>
-                <div role="cell" className="border px-1">
+                <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
+                    className="w-full"
                     aria-label={`${HEADER_ROW[2]} row ${index + 1}`}
                     value={line.partnerCountry}
                     onChange={(e) =>
@@ -203,9 +210,10 @@ export function DeclarationTable({
                     }
                   />
                 </div>
-                <div role="cell" className="border px-1">
+                <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
+                    className="w-full"
                     aria-label={`${HEADER_ROW[3]} row ${index + 1}`}
                     value={line.countryOfOrigin}
                     onChange={(e) =>
@@ -213,9 +221,10 @@ export function DeclarationTable({
                     }
                   />
                 </div>
-                <div role="cell" className="border px-1">
+                <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
+                    className="w-full"
                     aria-label={`${HEADER_ROW[4]} row ${index + 1}`}
                     value={line.natureOfTransaction}
                     onChange={(e) =>
@@ -225,9 +234,10 @@ export function DeclarationTable({
                     }
                   />
                 </div>
-                <div role="cell" className="border px-1">
+                <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
+                    className="w-full"
                     aria-label={`${HEADER_ROW[5]} row ${index + 1}`}
                     value={line.deliveryTerms}
                     onChange={(e) =>
@@ -235,9 +245,10 @@ export function DeclarationTable({
                     }
                   />
                 </div>
-                <div role="cell" className="border px-1">
+                <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
+                    className="w-full"
                     aria-label={`${HEADER_ROW[6]} row ${index + 1}`}
                     value={line.modeOfTransport}
                     onChange={(e) =>
@@ -247,9 +258,10 @@ export function DeclarationTable({
                     }
                   />
                 </div>
-                <div role="cell" className="border px-1">
+                <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
+                    className="w-full"
                     aria-label={`${HEADER_ROW[7]} row ${index + 1}`}
                     value={line.transportNationality}
                     onChange={(e) =>
@@ -259,9 +271,10 @@ export function DeclarationTable({
                     }
                   />
                 </div>
-                <div role="cell" className="border px-1">
+                <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
+                    className="w-full"
                     aria-label={`${HEADER_ROW[8]} row ${index + 1}`}
                     value={line.regionOfConsumption}
                     onChange={(e) =>
@@ -271,10 +284,11 @@ export function DeclarationTable({
                     }
                   />
                 </div>
-                <div role="cell" className="border px-1">
+                <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
                     inputMode="decimal"
+                    className="w-full"
                     aria-label={`${HEADER_ROW[9]} row ${index + 1}`}
                     value={formatDecimal(line.netWeightKg)}
                     onChange={(e) =>
@@ -294,10 +308,11 @@ export function DeclarationTable({
                   className="border px-1"
                   aria-label={`${HEADER_ROW[10]} row ${index + 1}`}
                 />
-                <div role="cell" className="border px-1">
+                <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
                     inputMode="decimal"
+                    className="w-full"
                     aria-label={`${HEADER_ROW[11]} row ${index + 1}`}
                     value={formatDecimal(line.value)}
                     onChange={(e) =>
@@ -307,10 +322,11 @@ export function DeclarationTable({
                     }
                   />
                 </div>
-                <div role="cell" className="border px-1">
+                <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
                     inputMode="decimal"
+                    className="w-full"
                     aria-label={`${HEADER_ROW[12]} row ${index + 1}`}
                     value={formatDecimal(line.statisticalValue)}
                     onChange={(e) =>
