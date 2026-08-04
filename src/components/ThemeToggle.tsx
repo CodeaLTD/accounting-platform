@@ -44,7 +44,7 @@ export function ThemeToggle() {
       type="button"
       onClick={toggle}
       aria-label="Смяна на светла/тъмна тема"
-      className="fixed top-4 left-4 z-50 cursor-pointer rounded-md border px-3 py-1 text-sm"
+      className="fixed top-4 right-4 z-50 cursor-pointer rounded-md border px-3 py-1 text-sm"
       style={{
         background: "var(--background)",
         color: "var(--foreground)",
