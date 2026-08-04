@@ -17,8 +17,19 @@ export const MESSAGES = {
     fileInput: "Качете файл с фактури",
     chooseFileButton: "Изберете файл",
     downloadButton: "Изтеглете декларация",
+    invoiceNumberColumn: "Фактура №",
+    searchInput: "Търсене по номер на фактура",
+    addAllButton: "Добави всички",
+    addRowButton: "Добави ред",
+    removeRowButton: "Премахни ред",
+    viewFinalTableButton: "виж НАП таблицата",
+    viewWorkingTableButton: "виж работната таблица",
   },
   files: {
     downloadFileName: "intrastat-declaration.xlsx",
+  },
+  confirmations: {
+    discardUnaddedRows: (count: number) =>
+      `Имате ${count} реда, които не са добавени към НАП таблицата. Те ще бъдат загубени. Продължавате ли?`,
   },
 } as const;
