@@ -9,14 +9,14 @@ interface SearchBarProps {
 
 export function SearchBar({ value, onChange }: SearchBarProps) {
   return (
-    <label className="flex flex-col gap-1">
+    <label className="flex w-64 max-w-full flex-col gap-1 self-start">
       {MESSAGES.labels.searchInput}
       <input
         type="text"
         aria-label={MESSAGES.labels.searchInput}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded border px-2 py-1"
+        className="w-full rounded border px-2 py-1"
       />
     </label>
   );

@@ -207,6 +207,31 @@ describe("Home page", () => {
     expect(screen.getByLabelText(MESSAGES.labels.fileInput)).toBeDisabled();
   });
 
+  it("hides the search bar until a file has been uploaded", async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    expect(
+      screen.queryByLabelText(MESSAGES.labels.searchInput),
+    ).not.toBeInTheDocument();
+
+    await fillConfig(user);
+    expect(
+      screen.queryByLabelText(MESSAGES.labels.searchInput),
+    ).not.toBeInTheDocument();
+
+    await user.upload(
+      screen.getByLabelText(MESSAGES.labels.fileInput),
+      loadSampleFile(),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText(MESSAGES.labels.searchInput),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("shows a plain-language error for a non-Excel file", async () => {
     const user = userEvent.setup({ applyAccept: false });
     render(<Home />);

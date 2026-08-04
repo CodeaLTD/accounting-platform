@@ -159,7 +159,7 @@ export default function Home() {
         onFileSelected={handleFileSelected}
         onInvalidFileType={handleInvalidFileType}
       />
-      {view === "working" && (
+      {view === "working" && workingLines && (
         <SearchBar value={searchQuery} onChange={setSearchQuery} />
       )}
       <ErrorBanner message={error} />
