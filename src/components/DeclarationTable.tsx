@@ -138,7 +138,11 @@ export function DeclarationTable({
         </div>
       </div>
 
-      <div ref={scrollRef} className="max-h-[65vh] overflow-y-auto">
+      <div
+        ref={scrollRef}
+        className="max-h-[65vh] overflow-y-auto"
+        style={{ scrollbarGutter: "stable" }}
+      >
         <div
           role="rowgroup"
           style={{
@@ -165,7 +169,10 @@ export function DeclarationTable({
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
-                <div role="cell" className="border px-1">
+                <div
+                  role="cell"
+                  className="flex items-center justify-center border px-1"
+                >
                   {renderRowAction(index)}
                 </div>
                 {showInvoiceNumber && (
