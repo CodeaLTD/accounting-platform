@@ -117,7 +117,11 @@ export function DeclarationTable({
   // scrollbar's width ate into a separate inner container's content box).
   return (
     <div role="table" aria-rowcount={lines.length + 1} className="text-sm">
-      <div ref={scrollRef} className="max-h-[65vh] overflow-auto">
+      <div
+        ref={scrollRef}
+        className="max-h-[65vh] overflow-auto"
+        style={{ maxWidth: totalWidth }}
+      >
         <div style={{ width: totalWidth }}>
           <div
             role="rowgroup"
