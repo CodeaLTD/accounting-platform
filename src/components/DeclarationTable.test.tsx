@@ -121,4 +121,38 @@ describe("DeclarationTable", () => {
       screen.getByRole("button", { name: "add row 1" }),
     ).toBeInTheDocument();
   });
+
+  it("only mounts a subset of rows into the DOM when there are far more rows than fit the viewport", () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 1000,
+      height: 300,
+      top: 0,
+      left: 0,
+      bottom: 300,
+      right: 1000,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+
+    const manyLines: WorkingLine[] = Array.from({ length: 200 }, (_, i) => ({
+      ...sampleLines[0],
+      commodityCode: `ROW-${i}`,
+    }));
+
+    render(
+      <DeclarationTable
+        lines={manyLines}
+        onLineChange={vi.fn()}
+        showInvoiceNumber={false}
+        renderRowAction={() => null}
+      />,
+    );
+
+    // A 300px viewport at 40px/row fits well under 200 rows at once — if
+    // virtualization is working, most of the 200 inputs never mount.
+    const renderedInputs = screen.getAllByDisplayValue(/^ROW-/);
+    expect(renderedInputs.length).toBeGreaterThan(0);
+    expect(renderedInputs.length).toBeLessThan(200);
+  });
 });
