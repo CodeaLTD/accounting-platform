@@ -4,16 +4,18 @@
 
 **Goal:** Build a small license server plus a framework-agnostic client-side verification library so the desktop app can prove "this is a paid, still-active subscription running on an authorized device" — working offline day-to-day, refreshing when online, and locking out after a grace period if it can't reach the server or the subscription lapses.
 
-**Architecture:** A standalone Node/Express service (`license-server/`, deployed separately from the Next.js app) owns a small SQLite database of licenses and activated devices, stays in sync with Stripe via webhook, and issues short-lived signed JWTs (RS256) on activation/refresh. The desktop app never talks to Stripe directly and never needs a live connection to function — it just verifies the JWT signature locally with an embedded public key. All client-side verification logic lives in `src/core/license/` as plain TypeScript with no Tauri/Node-only APIs, per the existing project rule that `src/core/` must stay framework-agnostic so it can move into a shared package later.
+**Architecture:** A standalone Node/Express service (`license-server/`, deployed separately from the Next.js app, reachable at a company-owned custom domain) owns a small SQLite database of licenses and activated devices, and issues short-lived signed JWTs (RS256) on activation/refresh. Billing is handled entirely outside this system: no Stripe, no payment processor. A license's paid-through date (`paidUntil`) is set and extended by hand via an admin CLI script whenever the client pays directly (bank transfer, invoice, etc.). The desktop app never needs a live connection to function — it just verifies the JWT signature locally with an embedded public key. All client-side verification logic lives in `src/core/license/` as plain TypeScript with no Tauri/Node-only APIs, per the existing project rule that `src/core/` must stay framework-agnostic so it can move into a shared package later.
 
-**Tech Stack:** Node.js + TypeScript + Express + better-sqlite3 + Stripe SDK (server); `jose` for JWT signing and verification (used on both server and client — it's isomorphic and built on Web Crypto, so the same verification code runs in Node tests today and inside a Tauri webview later); Vitest for tests on both sides, matching the existing repo.
+**Tech Stack:** Node.js + TypeScript + Express + better-sqlite3 (server); `jose` for JWT signing and verification (used on both server and client — it's isomorphic and built on Web Crypto, so the same verification code runs in Node tests today and inside a Tauri webview later); Vitest for tests on both sides, matching the existing repo.
 
 ## Global Constraints
 
 - Code under `src/core/license/` must be plain TypeScript with no Node-only or Tauri-only APIs — it has to run inside a Tauri webview later without modification.
-- The license server is a separate deployable unit, not part of the Next.js app — lives in a new top-level `license-server/` directory with its own `package.json`.
+- The license server is a separate deployable unit, not part of the Next.js app — lives in a new top-level `license-server/` directory with its own `package.json`. It's hosted at a custom domain the company already owns; this plan doesn't set up DNS/TLS/hosting itself (see Follow-ups), but the future Tauri adapter will point at that base URL for `/activate` and `/refresh`.
 - One accountant client for now: license keys are created manually via an admin CLI script, not a self-serve signup flow. Default seat limit is 1 device per license.
-- Token lifetime is 14 days; the offline grace period after expiry is 10 days before the app must lock out. (Matches the previously-agreed 7–14 day range.)
+- No payment processor. A license is "active" purely based on `paidUntil`, a paid-through timestamp set at creation and updated on renewal — both via admin CLI, both by hand, whenever the client pays directly. There is no automatic billing, dunning, or proration; a multi-year prepayment is handled the exact same way as a 1-month one, just with a `paidUntil` further in the future.
+- No email-based ownership check for now — dropped pending a look at the actual phone-home URL/interface, which may already cover this. Cheap to add back later if needed: it would only touch Task 1's schema and Task 3's `/activate` handler, since `/refresh` and the framework-agnostic client library (Tasks 7-8) don't reference identity at all.
+- Token lifetime is 14 days; the offline grace period after expiry is 10 days before the app must lock out. (Matches the previously-agreed 7–14 day range.) These numbers are intentionally unchanged from the original design — see the note on the `locked` state in Task 8: a "locked" client is not a client that must re-enter its license key, it's one that needs a single successful reconnect, so long offline stretches (e.g. a client on extended leave) resolve themselves the moment the app is opened with a network connection, without any user action.
 - Use `jose` for all JWT signing/verification — do not hand-roll JWT parsing or crypto.
 - This plan does not touch Tauri scaffolding, the license-key-entry UI, or an admin dashboard — see "Follow-ups" at the end.
 
@@ -22,11 +24,11 @@
 ## Follow-ups (explicitly out of scope for this plan)
 
 - Setting up the actual Tauri shell (`output: 'export'` in `next.config.ts`, Tauri project scaffold, packaging).
-- The in-app UI for entering a license key, showing "grace period" warnings, and the locked-out screen.
+- The in-app UI for entering a license key, showing "grace period" warnings, and the locked-out screen — this UI must trigger an automatic background `/refresh` attempt when the app launches in a `locked` or `grace` state, rather than immediately prompting the user to re-enter a license key. Getting this wrong is what would make long offline absences (leave, travel) feel like a false lockout.
 - A real device-fingerprint implementation (this plan defines the *interface* the future Tauri adapter must satisfy, not the OS-level fingerprinting itself).
 - Secure token storage on disk (Tauri's filesystem/secure-storage APIs) — this plan defines a `LicenseStorage` interface but only ships an in-memory reference implementation for tests.
-- An admin dashboard beyond the one-shot CLI script for creating a license.
-- Deployment/hosting choice for `license-server` (Fly.io, Render, a small VPS, etc.).
+- An admin dashboard beyond the one-shot CLI scripts for creating/extending a license.
+- DNS/TLS/process-hosting setup for `license-server` at the company's custom domain (the domain itself is already available; wiring it up is a deployment task, not a code task).
 
 ---
 
@@ -40,7 +42,7 @@
 - Test: `license-server/test/db.test.ts`
 
 **Interfaces:**
-- Produces: `openDb(path: string): Database.Database`, `createLicense(db, license: License): void`, `getLicense(db, licenseKey: string): License | undefined`, `countDevices(db, licenseKey: string): number`, `isDeviceRegistered(db, licenseKey: string, deviceId: string): boolean`, `registerDevice(db, licenseKey: string, deviceId: string): void`, `setLicenseStatus(db, stripeCustomerId: string, status: License["status"]): void`, and the `License` interface `{ licenseKey: string; stripeCustomerId: string; status: "active" | "past_due" | "canceled"; seatLimit: number }`. All later tasks in `license-server/` depend on these exact names and signatures.
+- Produces: `openDb(path: string): Database.Database`, `createLicense(db, license: License): void`, `getLicense(db, licenseKey: string): License | undefined`, `countDevices(db, licenseKey: string): number`, `isDeviceRegistered(db, licenseKey: string, deviceId: string): boolean`, `registerDevice(db, licenseKey: string, deviceId: string): void`, `setLicenseExpiry(db, licenseKey: string, paidUntil: number): void`, `setSeatLimit(db, licenseKey: string, seatLimit: number): void`, and the `License` interface `{ licenseKey: string; paidUntil: number; seatLimit: number }`. `paidUntil` is an epoch-millisecond timestamp; a license is active whenever `Date.now() <= paidUntil`, checked directly by Tasks 3/4 — there is no separate stored `status` field and no payment processor involved. `seatLimit` is set at creation and can be raised or lowered later via `setSeatLimit` — lowering it below the current device count doesn't retroactively deregister anyone, it just blocks new activations until the count drops back under the limit. All later tasks in `license-server/` depend on these exact names and signatures.
 
 - [ ] **Step 1: Create the package**
 
@@ -62,8 +64,7 @@ mkdir -p license-server/src license-server/test
   "dependencies": {
     "better-sqlite3": "^11.3.0",
     "express": "^4.21.0",
-    "jose": "^5.9.0",
-    "stripe": "^17.0.0"
+    "jose": "^5.9.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
@@ -126,27 +127,29 @@ import {
   countDevices,
   isDeviceRegistered,
   registerDevice,
-  setLicenseStatus,
+  setLicenseExpiry,
+  setSeatLimit,
 } from "../src/db";
 
 function freshDb() {
   return openDb(":memory:");
 }
 
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 describe("license db", () => {
   it("creates and reads back a license", () => {
     const db = freshDb();
+    const paidUntil = Date.now() + 365 * ONE_DAY_MS;
     createLicense(db, {
       licenseKey: "LIC-0001",
-      stripeCustomerId: "cus_123",
-      status: "active",
+      paidUntil,
       seatLimit: 1,
     });
 
     expect(getLicense(db, "LIC-0001")).toEqual({
       licenseKey: "LIC-0001",
-      stripeCustomerId: "cus_123",
-      status: "active",
+      paidUntil,
       seatLimit: 1,
     });
   });
@@ -160,8 +163,7 @@ describe("license db", () => {
     const db = freshDb();
     createLicense(db, {
       licenseKey: "LIC-0002",
-      stripeCustomerId: "cus_456",
-      status: "active",
+      paidUntil: Date.now() + 365 * ONE_DAY_MS,
       seatLimit: 2,
     });
 
@@ -175,18 +177,31 @@ describe("license db", () => {
     expect(isDeviceRegistered(db, "LIC-0002", "device-a")).toBe(true);
   });
 
-  it("updates status by Stripe customer id", () => {
+  it("extends paidUntil by license key, e.g. on manual renewal", () => {
     const db = freshDb();
     createLicense(db, {
       licenseKey: "LIC-0003",
-      stripeCustomerId: "cus_789",
-      status: "active",
+      paidUntil: Date.now() + 30 * ONE_DAY_MS,
       seatLimit: 1,
     });
 
-    setLicenseStatus(db, "cus_789", "canceled");
+    const newPaidUntil = Date.now() + 3 * 365 * ONE_DAY_MS; // e.g. a 3-year prepay
+    setLicenseExpiry(db, "LIC-0003", newPaidUntil);
 
-    expect(getLicense(db, "LIC-0003")?.status).toBe("canceled");
+    expect(getLicense(db, "LIC-0003")?.paidUntil).toBe(newPaidUntil);
+  });
+
+  it("updates seat limit by license key", () => {
+    const db = freshDb();
+    createLicense(db, {
+      licenseKey: "LIC-0004",
+      paidUntil: Date.now() + 365 * ONE_DAY_MS,
+      seatLimit: 1,
+    });
+
+    setSeatLimit(db, "LIC-0004", 3);
+
+    expect(getLicense(db, "LIC-0004")?.seatLimit).toBe(3);
   });
 });
 ```
@@ -205,8 +220,8 @@ import Database from "better-sqlite3";
 
 export interface License {
   licenseKey: string;
-  stripeCustomerId: string;
-  status: "active" | "past_due" | "canceled";
+  /** Epoch milliseconds. The license is active while `Date.now() <= paidUntil`. */
+  paidUntil: number;
   seatLimit: number;
 }
 
@@ -216,8 +231,7 @@ export function openDb(path: string): Database.Database {
   db.exec(`
     CREATE TABLE IF NOT EXISTS licenses (
       license_key TEXT PRIMARY KEY,
-      stripe_customer_id TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active',
+      paid_until INTEGER NOT NULL,
       seat_limit INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE IF NOT EXISTS devices (
@@ -232,8 +246,8 @@ export function openDb(path: string): Database.Database {
 
 export function createLicense(db: Database.Database, license: License): void {
   db.prepare(
-    "INSERT INTO licenses (license_key, stripe_customer_id, status, seat_limit) VALUES (?, ?, ?, ?)",
-  ).run(license.licenseKey, license.stripeCustomerId, license.status, license.seatLimit);
+    "INSERT INTO licenses (license_key, paid_until, seat_limit) VALUES (?, ?, ?)",
+  ).run(license.licenseKey, license.paidUntil, license.seatLimit);
 }
 
 export function getLicense(
@@ -242,8 +256,8 @@ export function getLicense(
 ): License | undefined {
   const row = db
     .prepare(
-      `SELECT license_key as licenseKey, stripe_customer_id as stripeCustomerId,
-              status, seat_limit as seatLimit
+      `SELECT license_key as licenseKey,
+              paid_until as paidUntil, seat_limit as seatLimit
        FROM licenses WHERE license_key = ?`,
     )
     .get(licenseKey) as License | undefined;
@@ -278,14 +292,25 @@ export function registerDevice(
   ).run(licenseKey, deviceId, Date.now());
 }
 
-export function setLicenseStatus(
+export function setLicenseExpiry(
   db: Database.Database,
-  stripeCustomerId: string,
-  status: License["status"],
+  licenseKey: string,
+  paidUntil: number,
 ): void {
-  db.prepare("UPDATE licenses SET status = ? WHERE stripe_customer_id = ?").run(
-    status,
-    stripeCustomerId,
+  db.prepare("UPDATE licenses SET paid_until = ? WHERE license_key = ?").run(
+    paidUntil,
+    licenseKey,
+  );
+}
+
+export function setSeatLimit(
+  db: Database.Database,
+  licenseKey: string,
+  seatLimit: number,
+): void {
+  db.prepare("UPDATE licenses SET seat_limit = ? WHERE license_key = ?").run(
+    seatLimit,
+    licenseKey,
   );
 }
 ```
@@ -293,7 +318,7 @@ export function setLicenseStatus(
 - [ ] **Step 6: Run the test to verify it passes**
 
 Run: `cd license-server && npx vitest run`
-Expected: PASS (4 tests)
+Expected: PASS (5 tests)
 
 - [ ] **Step 7: Commit**
 
@@ -313,7 +338,7 @@ git commit -m "Scaffold license-server with SQLite-backed license/device storage
 
 **Interfaces:**
 - Consumes: nothing from Task 1.
-- Produces: `issueLicenseToken(params: { licenseKey: string; deviceId: string; privateKeyPem: string; ttlSeconds: number }): Promise<string>`, and the test helper `generateTestKeyPair(): { privateKeyPem: string; publicKeyPem: string }` (reused by Task 3 and by the core library's tests in Task 6). Token payload shape: `sub` = licenseKey, `deviceId` = deviceId, standard `iat`/`exp` claims.
+- Produces: `issueLicenseToken(params: { licenseKey: string; deviceId: string; privateKeyPem: string; ttlSeconds: number }): Promise<string>`, and the test helper `generateTestKeyPair(): { privateKeyPem: string; publicKeyPem: string }` (reused by Task 3; the core library's tests in Task 7 define their own local copy since `src/core/` can't import from `license-server/`). Token payload shape: `sub` = licenseKey, `deviceId` = deviceId, standard `iat`/`exp` claims.
 
 - [ ] **Step 1: Write the test key-pair helper**
 
@@ -448,6 +473,7 @@ import { handleActivate } from "../src/routes/activate";
 import { generateTestKeyPair } from "./testKeys";
 
 const { privateKeyPem } = generateTestKeyPair();
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 describe("handleActivate", () => {
   it("returns not_found for an unknown license key", async () => {
@@ -459,12 +485,11 @@ describe("handleActivate", () => {
     expect(result).toEqual({ ok: false, reason: "not_found" });
   });
 
-  it("returns inactive for a canceled subscription", async () => {
+  it("returns inactive once paidUntil is in the past", async () => {
     const db = openDb(":memory:");
     createLicense(db, {
       licenseKey: "LIC-0001",
-      stripeCustomerId: "cus_1",
-      status: "canceled",
+      paidUntil: Date.now() - ONE_DAY_MS,
       seatLimit: 1,
     });
 
@@ -479,8 +504,7 @@ describe("handleActivate", () => {
     const db = openDb(":memory:");
     createLicense(db, {
       licenseKey: "LIC-0002",
-      stripeCustomerId: "cus_2",
-      status: "active",
+      paidUntil: Date.now() + 365 * ONE_DAY_MS,
       seatLimit: 1,
     });
 
@@ -495,8 +519,7 @@ describe("handleActivate", () => {
     const db = openDb(":memory:");
     createLicense(db, {
       licenseKey: "LIC-0003",
-      stripeCustomerId: "cus_3",
-      status: "active",
+      paidUntil: Date.now() + 365 * ONE_DAY_MS,
       seatLimit: 1,
     });
 
@@ -516,8 +539,7 @@ describe("handleActivate", () => {
     const db = openDb(":memory:");
     createLicense(db, {
       licenseKey: "LIC-0004",
-      stripeCustomerId: "cus_4",
-      status: "active",
+      paidUntil: Date.now() + 365 * ONE_DAY_MS,
       seatLimit: 1,
     });
 
@@ -572,7 +594,7 @@ export async function handleActivate(
 ): Promise<ActivateResult> {
   const license = getLicense(db, request.licenseKey);
   if (!license) return { ok: false, reason: "not_found" };
-  if (license.status !== "active") return { ok: false, reason: "inactive" };
+  if (Date.now() > license.paidUntil) return { ok: false, reason: "inactive" };
 
   const alreadyRegistered = isDeviceRegistered(db, request.licenseKey, request.deviceId);
   if (!alreadyRegistered) {
@@ -623,11 +645,12 @@ git commit -m "Add /activate handler enforcing per-license device seat limit"
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { openDb, createLicense, registerDevice, setLicenseStatus } from "../src/db";
+import { openDb, createLicense, registerDevice, setLicenseExpiry } from "../src/db";
 import { handleRefresh } from "../src/routes/refresh";
 import { generateTestKeyPair } from "./testKeys";
 
 const { privateKeyPem } = generateTestKeyPair();
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 describe("handleRefresh", () => {
   it("returns not_found for an unknown license key", async () => {
@@ -643,8 +666,7 @@ describe("handleRefresh", () => {
     const db = openDb(":memory:");
     createLicense(db, {
       licenseKey: "LIC-0001",
-      stripeCustomerId: "cus_1",
-      status: "active",
+      paidUntil: Date.now() + 365 * ONE_DAY_MS,
       seatLimit: 1,
     });
 
@@ -655,16 +677,15 @@ describe("handleRefresh", () => {
     expect(result).toEqual({ ok: false, reason: "device_not_registered" });
   });
 
-  it("returns inactive once the subscription lapses, even for a registered device", async () => {
+  it("returns inactive once paidUntil lapses, even for a registered device", async () => {
     const db = openDb(":memory:");
     createLicense(db, {
       licenseKey: "LIC-0002",
-      stripeCustomerId: "cus_2",
-      status: "active",
+      paidUntil: Date.now() + 365 * ONE_DAY_MS,
       seatLimit: 1,
     });
     registerDevice(db, "LIC-0002", "device-a");
-    setLicenseStatus(db, "cus_2", "canceled");
+    setLicenseExpiry(db, "LIC-0002", Date.now() - ONE_DAY_MS);
 
     const result = await handleRefresh(db, privateKeyPem, {
       licenseKey: "LIC-0002",
@@ -677,8 +698,7 @@ describe("handleRefresh", () => {
     const db = openDb(":memory:");
     createLicense(db, {
       licenseKey: "LIC-0003",
-      stripeCustomerId: "cus_3",
-      status: "active",
+      paidUntil: Date.now() + 365 * ONE_DAY_MS,
       seatLimit: 1,
     });
     registerDevice(db, "LIC-0003", "device-a");
@@ -727,7 +747,7 @@ export async function handleRefresh(
   if (!isDeviceRegistered(db, request.licenseKey, request.deviceId)) {
     return { ok: false, reason: "device_not_registered" };
   }
-  if (license.status !== "active") return { ok: false, reason: "inactive" };
+  if (Date.now() > license.paidUntil) return { ok: false, reason: "inactive" };
 
   const token = await issueLicenseToken({
     licenseKey: request.licenseKey,
@@ -753,158 +773,15 @@ git commit -m "Add /refresh handler for already-activated devices"
 
 ---
 
-### Task 5: Stripe webhook — keep license status in sync
-
-**Files:**
-- Create: `license-server/src/routes/webhook.ts`
-- Test: `license-server/test/webhook.test.ts`
-
-**Interfaces:**
-- Consumes: `openDb`, `createLicense`, `getLicense`, `setLicenseStatus` from Task 1.
-- Produces: `handleStripeSubscriptionEvent(db, event: StripeSubscriptionEvent): void` and the `StripeSubscriptionEvent` type. Task 7 (server wiring) depends on this function name; it is called with the already-verified Stripe event object (signature verification happens in Task 7, at the Express layer, using the raw `stripe` SDK — not re-implemented here).
-
-- [ ] **Step 1: Write the failing tests**
-
-`license-server/test/webhook.test.ts`:
-
-```ts
-import { describe, expect, it } from "vitest";
-import { openDb, createLicense, getLicense } from "../src/db";
-import { handleStripeSubscriptionEvent } from "../src/routes/webhook";
-
-function baseLicense(db: ReturnType<typeof openDb>) {
-  createLicense(db, {
-    licenseKey: "LIC-0001",
-    stripeCustomerId: "cus_1",
-    status: "active",
-    seatLimit: 1,
-  });
-}
-
-describe("handleStripeSubscriptionEvent", () => {
-  it("marks the license canceled on customer.subscription.deleted", () => {
-    const db = openDb(":memory:");
-    baseLicense(db);
-
-    handleStripeSubscriptionEvent(db, {
-      type: "customer.subscription.deleted",
-      data: { object: { customer: "cus_1", status: "canceled" } },
-    });
-
-    expect(getLicense(db, "LIC-0001")?.status).toBe("canceled");
-  });
-
-  it("marks the license past_due when Stripe reports past_due", () => {
-    const db = openDb(":memory:");
-    baseLicense(db);
-
-    handleStripeSubscriptionEvent(db, {
-      type: "customer.subscription.updated",
-      data: { object: { customer: "cus_1", status: "past_due" } },
-    });
-
-    expect(getLicense(db, "LIC-0001")?.status).toBe("past_due");
-  });
-
-  it("marks the license active again when Stripe reports active", () => {
-    const db = openDb(":memory:");
-    baseLicense(db);
-
-    handleStripeSubscriptionEvent(db, {
-      type: "customer.subscription.updated",
-      data: { object: { customer: "cus_1", status: "past_due" } },
-    });
-    handleStripeSubscriptionEvent(db, {
-      type: "customer.subscription.updated",
-      data: { object: { customer: "cus_1", status: "active" } },
-    });
-
-    expect(getLicense(db, "LIC-0001")?.status).toBe("active");
-  });
-
-  it("ignores unrelated event types", () => {
-    const db = openDb(":memory:");
-    baseLicense(db);
-
-    handleStripeSubscriptionEvent(db, {
-      type: "invoice.paid",
-      data: { object: { customer: "cus_1", status: "active" } },
-    });
-
-    expect(getLicense(db, "LIC-0001")?.status).toBe("active");
-  });
-});
-```
-
-- [ ] **Step 2: Run the tests to verify they fail**
-
-Run: `cd license-server && npx vitest run test/webhook.test.ts`
-Expected: FAIL — `src/routes/webhook.ts` does not exist yet.
-
-- [ ] **Step 3: Implement `handleStripeSubscriptionEvent`**
-
-`license-server/src/routes/webhook.ts`:
-
-```ts
-import type Database from "better-sqlite3";
-import { setLicenseStatus, type License } from "../db";
-
-export interface StripeSubscriptionEvent {
-  type: string;
-  data: {
-    object: {
-      customer: string;
-      status: string;
-    };
-  };
-}
-
-const ACTIVE_STRIPE_STATUSES = new Set(["active", "trialing"]);
-
-function mapStripeStatus(stripeStatus: string): License["status"] {
-  if (ACTIVE_STRIPE_STATUSES.has(stripeStatus)) return "active";
-  if (stripeStatus === "past_due") return "past_due";
-  return "canceled";
-}
-
-export function handleStripeSubscriptionEvent(
-  db: Database.Database,
-  event: StripeSubscriptionEvent,
-): void {
-  if (
-    event.type !== "customer.subscription.updated" &&
-    event.type !== "customer.subscription.deleted"
-  ) {
-    return;
-  }
-  const { customer, status } = event.data.object;
-  setLicenseStatus(db, customer, mapStripeStatus(status));
-}
-```
-
-- [ ] **Step 4: Run the tests to verify they pass**
-
-Run: `cd license-server && npx vitest run test/webhook.test.ts`
-Expected: PASS (4 tests)
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add license-server/src/routes/webhook.ts license-server/test/webhook.test.ts
-git commit -m "Sync license status from Stripe subscription webhook events"
-```
-
----
-
-### Task 6: Express server wiring + Stripe signature verification
+### Task 5: Express server wiring
 
 **Files:**
 - Create: `license-server/src/server.ts`
 - Test: `license-server/test/server.test.ts`
 
 **Interfaces:**
-- Consumes: `openDb` (Task 1), `handleActivate` (Task 3), `handleRefresh` (Task 4), `handleStripeSubscriptionEvent` + `StripeSubscriptionEvent` (Task 5).
-- Produces: `createServer(config: { dbPath: string; privateKeyPem: string; stripeWebhookSecret: string; stripeApiKey: string }): express.Express`. This is the only export later deployment tooling needs.
+- Consumes: `openDb` (Task 1), `handleActivate` (Task 3), `handleRefresh` (Task 4).
+- Produces: `createServer(config: { dbPath: string; privateKeyPem: string }): express.Express`. This is the only export later deployment tooling needs — deployment just points it at the company's custom domain (see Global Constraints) and the SQLite file path.
 
 - [ ] **Step 1: Write the failing smoke test**
 
@@ -919,12 +796,7 @@ import { generateTestKeyPair } from "./testKeys";
 describe("createServer", () => {
   it("responds to a health check", async () => {
     const { privateKeyPem } = generateTestKeyPair();
-    const app = createServer({
-      dbPath: ":memory:",
-      privateKeyPem,
-      stripeWebhookSecret: "whsec_test",
-      stripeApiKey: "sk_test_dummy",
-    });
+    const app = createServer({ dbPath: ":memory:", privateKeyPem });
 
     const response = await request(app).get("/health");
 
@@ -934,12 +806,7 @@ describe("createServer", () => {
 
   it("returns 403 for /activate with an unknown license key", async () => {
     const { privateKeyPem } = generateTestKeyPair();
-    const app = createServer({
-      dbPath: ":memory:",
-      privateKeyPem,
-      stripeWebhookSecret: "whsec_test",
-      stripeApiKey: "sk_test_dummy",
-    });
+    const app = createServer({ dbPath: ":memory:", privateKeyPem });
 
     const response = await request(app)
       .post("/activate")
@@ -962,57 +829,22 @@ Expected: FAIL — `src/server.ts` does not exist yet.
 
 ```ts
 import express from "express";
-import Stripe from "stripe";
 import { openDb } from "./db";
 import { handleActivate } from "./routes/activate";
 import { handleRefresh } from "./routes/refresh";
-import {
-  handleStripeSubscriptionEvent,
-  type StripeSubscriptionEvent,
-} from "./routes/webhook";
 
 export interface ServerConfig {
   dbPath: string;
   privateKeyPem: string;
-  stripeWebhookSecret: string;
-  stripeApiKey: string;
 }
 
 export function createServer(config: ServerConfig): express.Express {
   const db = openDb(config.dbPath);
-  const stripe = new Stripe(config.stripeApiKey);
   const app = express();
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true });
   });
-
-  // Stripe needs the raw body to verify the webhook signature, so this route
-  // is registered before the JSON body parser below applies to everything else.
-  app.post(
-    "/webhook/stripe",
-    express.raw({ type: "application/json" }),
-    (req, res) => {
-      const signature = req.headers["stripe-signature"];
-      if (typeof signature !== "string") {
-        res.status(400).send("missing signature");
-        return;
-      }
-      let event: Stripe.Event;
-      try {
-        event = stripe.webhooks.constructEvent(
-          req.body,
-          signature,
-          config.stripeWebhookSecret,
-        );
-      } catch {
-        res.status(400).send("invalid signature");
-        return;
-      }
-      handleStripeSubscriptionEvent(db, event as unknown as StripeSubscriptionEvent);
-      res.json({ received: true });
-    },
-  );
 
   app.use(express.json());
 
@@ -1039,20 +871,21 @@ Expected: PASS (2 tests)
 
 ```bash
 git add license-server/src/server.ts license-server/test/server.test.ts
-git commit -m "Wire activate/refresh/webhook routes into an Express server"
+git commit -m "Wire activate/refresh routes into an Express server"
 ```
 
 ---
 
-### Task 7: Admin CLI to issue a license manually
+### Task 6: Admin CLI to issue and extend a license manually
 
 **Files:**
 - Create: `license-server/src/admin/createLicense.ts`
+- Create: `license-server/src/admin/extendLicense.ts`
 - Test: `license-server/test/admin/createLicense.test.ts`
 
 **Interfaces:**
-- Consumes: `openDb`, `createLicense` from Task 1.
-- Produces: `generateLicenseKey(): string` (exported for testing) and a CLI entry point that calls it. No other task depends on this file.
+- Consumes: `openDb`, `createLicense`, `setLicenseExpiry`, `setSeatLimit` from Task 1.
+- Produces: `generateLicenseKey(): string` (exported for testing) and two CLI entry points: `createLicense.ts` taking `<dbPath> <paidUntilISO> [seatLimit=1]` (issues a brand-new license), and `extendLicense.ts` taking `<dbPath> <licenseKey> <paidUntilISO> [seatLimit]` (renews an existing one — e.g. after the client pays for another year, or three — and optionally adjusts its seat count in the same call; omitting `seatLimit` leaves it unchanged). Both parse `paidUntilISO` as an ISO date string via `new Date(arg).getTime()`, so a multi-year prepay is just a date further out — no different code path. No other task depends on these files.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1092,17 +925,18 @@ export function generateLicenseKey(): string {
 }
 
 function main() {
-  const [, , dbPath, stripeCustomerId, seatLimitArg] = process.argv;
-  if (!dbPath || !stripeCustomerId) {
-    console.error("Usage: tsx src/admin/createLicense.ts <dbPath> <stripeCustomerId> [seatLimit=1]");
+  const [, , dbPath, paidUntilArg, seatLimitArg] = process.argv;
+  if (!dbPath || !paidUntilArg) {
+    console.error(
+      "Usage: tsx src/admin/createLicense.ts <dbPath> <paidUntilISO> [seatLimit=1]",
+    );
     process.exit(1);
   }
   const db = openDb(dbPath);
   const licenseKey = generateLicenseKey();
   createLicense(db, {
     licenseKey,
-    stripeCustomerId,
-    status: "active",
+    paidUntil: new Date(paidUntilArg).getTime(),
     seatLimit: seatLimitArg ? Number(seatLimitArg) : 1,
   });
   console.log(licenseKey);
@@ -1120,16 +954,49 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 Run: `cd license-server && npx vitest run test/admin/createLicense.test.ts`
 Expected: PASS (2 tests)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Implement the renewal CLI script**
+
+`license-server/src/admin/extendLicense.ts`:
+
+```ts
+import { openDb, setLicenseExpiry, setSeatLimit } from "../db";
+
+function main() {
+  const [, , dbPath, licenseKey, paidUntilArg, seatLimitArg] = process.argv;
+  if (!dbPath || !licenseKey || !paidUntilArg) {
+    console.error(
+      "Usage: tsx src/admin/extendLicense.ts <dbPath> <licenseKey> <paidUntilISO> [seatLimit]",
+    );
+    process.exit(1);
+  }
+  const db = openDb(dbPath);
+  setLicenseExpiry(db, licenseKey, new Date(paidUntilArg).getTime());
+  if (seatLimitArg) {
+    setSeatLimit(db, licenseKey, Number(seatLimitArg));
+  }
+  console.log(
+    `${licenseKey} paid through ${new Date(paidUntilArg).toISOString()}` +
+      (seatLimitArg ? `, seat limit ${seatLimitArg}` : ""),
+  );
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
+```
+
+This wraps `setLicenseExpiry`/`setSeatLimit` (Task 1), already covered by `db.test.ts`'s renewal and seat-limit tests — no separate test file needed for what is a thin CLI shell around tested primitives.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add license-server/src/admin/createLicense.ts license-server/test/admin/createLicense.test.ts
-git commit -m "Add admin CLI script to manually issue a license"
+git add license-server/src/admin/createLicense.ts license-server/src/admin/extendLicense.ts license-server/test/admin/createLicense.test.ts
+git commit -m "Add admin CLI scripts to manually issue, renew, and adjust seat limits for a license"
 ```
 
 ---
 
-### Task 8: Core license types + `verifyLicenseToken` (framework-agnostic)
+### Task 7: Core license types + `verifyLicenseToken` (framework-agnostic)
 
 **Files:**
 - Create: `src/core/license/types.ts`
@@ -1138,7 +1005,7 @@ git commit -m "Add admin CLI script to manually issue a license"
 - Modify: `package.json` (repo root) — add `jose` to `dependencies`
 
 **Interfaces:**
-- Produces: `LicensePayload` type `{ licenseKey: string; deviceId: string; expiresAt: number }`, and `verifyLicenseToken(token: string, publicKeyPem: string): Promise<LicensePayload | null>`. Task 9 depends on `LicensePayload`.
+- Produces: `LicensePayload` type `{ licenseKey: string; deviceId: string; expiresAt: number }`, and `verifyLicenseToken(token: string, publicKeyPem: string): Promise<LicensePayload | null>`. Task 8 depends on `LicensePayload`.
 
 - [ ] **Step 1: Add the `jose` dependency**
 
@@ -1279,15 +1146,15 @@ git commit -m "Add framework-agnostic license token verification (jose/Web Crypt
 
 ---
 
-### Task 9: Core license status state machine (valid / grace / locked)
+### Task 8: Core license status state machine (valid / grace / locked)
 
 **Files:**
 - Create: `src/core/license/licenseState.ts`
 - Test: `src/core/license/licenseState.test.ts`
 
 **Interfaces:**
-- Consumes: `LicensePayload` from Task 8.
-- Produces: `LicenseStatus = "valid" | "grace" | "locked"` and `computeLicenseStatus(params: { payload: LicensePayload | null; lastRefreshAt: number | null; now: number }): LicenseStatus`. This is what a future Tauri adapter calls every time the app starts, passing in the locally-stored token's verified payload (or `null` if verification failed/no token stored), the last time a refresh succeeded (`null` if never), and the current time.
+- Consumes: `LicensePayload` from Task 7.
+- Produces: `LicenseStatus = "valid" | "grace" | "locked"` and `computeLicenseStatus(params: { payload: LicensePayload | null; lastRefreshAt: number | null; now: number }): LicenseStatus`. This is what a future Tauri adapter calls every time the app starts, passing in the locally-stored token's verified payload (or `null` if verification failed/no token stored), the last time a refresh succeeded (`null` if never), and the current time. `locked` here means "no currently-valid cached token," not "invalid license" — `deviceId`/`licenseKey` never expire client-side, so the future adapter must respond to `grace`/`locked` by silently retrying `/refresh` in the background before ever prompting the user to re-enter a license key. That's what makes a long connectivity gap (e.g. a client on extended leave) self-heal on the next launch with internet, instead of presenting as a false lockout.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1400,6 +1267,6 @@ git commit -m "Add valid/grace/locked license status state machine"
 
 ## Self-Review Notes
 
-- **Spec coverage:** subscription enforcement (Task 8/9 verify+grace-period logic mirroring the previously agreed plan), device-limit enforcement to stop casual sharing (Task 3's seat-limit logic), Stripe as the source of truth (Task 5), manual issuance for the single current client (Task 7), and the framework-agnostic constraint (Tasks 8-9 use only `jose`/Web Crypto, no Node-only APIs) are all covered by a task each.
+- **Spec coverage:** subscription enforcement is now `paidUntil`-based with no payment processor (Task 1's schema, Task 3/4's `Date.now() > license.paidUntil` checks), device-limit enforcement to stop casual sharing with an adjustable seat count (Task 3's seat-limit logic + Task 1's `setSeatLimit`, exposed via Task 6's `extendLicense.ts`; lowering it below the current device count blocks new activations rather than retroactively deregistering anyone), manual issuance and renewal for the single current client (Task 6's two CLI scripts, `paidUntil` set/extended by hand whenever the client pays directly — a 3-year prepay is just a further-out date, no special-casing), the "locked ≠ re-enter license key" reconnect contract (Task 8, also called out in Global Constraints and the in-app-UI Follow-up), and the framework-agnostic constraint (Tasks 7-8 use only `jose`/Web Crypto, no Node-only APIs) are all covered by a task each. Email-based ownership checking was considered and deliberately dropped for now (see Global Constraints) — it's cheap to add back once the actual phone-home URL's requirements are known.
 - **Placeholder scan:** no TBD/TODO markers; every step has real, runnable code.
-- **Type consistency:** `ActivateResult`/`RefreshResult` shapes are defined once (Tasks 3/4) and consumed as-is by Task 6's server wiring without renaming; `LicensePayload` is defined once (Task 8) and consumed unchanged by Task 9.
+- **Type consistency:** `ActivateResult`/`RefreshResult` shapes are defined once (Tasks 3/4) and consumed as-is by Task 5's server wiring without renaming; `LicensePayload` is defined once (Task 7) and consumed unchanged by Task 8; `License.paidUntil` (Task 1) flows unchanged into `createLicense`/`extendLicense` (Task 6) and `handleActivate`'s/`handleRefresh`'s comparisons (Tasks 3/4).
