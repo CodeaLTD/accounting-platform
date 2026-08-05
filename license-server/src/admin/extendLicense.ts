@@ -1,0 +1,24 @@
+import { openDb, setLicenseExpiry, setSeatLimit } from "../db";
+
+function main() {
+  const [, , dbPath, licenseKey, paidUntilArg, seatLimitArg] = process.argv;
+  if (!dbPath || !licenseKey || !paidUntilArg) {
+    console.error(
+      "Usage: tsx src/admin/extendLicense.ts <dbPath> <licenseKey> <paidUntilISO> [seatLimit]",
+    );
+    process.exit(1);
+  }
+  const db = openDb(dbPath);
+  setLicenseExpiry(db, licenseKey, new Date(paidUntilArg).getTime());
+  if (seatLimitArg) {
+    setSeatLimit(db, licenseKey, Number(seatLimitArg));
+  }
+  console.log(
+    `${licenseKey} paid through ${new Date(paidUntilArg).toISOString()}` +
+      (seatLimitArg ? `, seat limit ${seatLimitArg}` : ""),
+  );
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
