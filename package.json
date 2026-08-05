@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:license-server": "npm --prefix license-server test"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.9",
