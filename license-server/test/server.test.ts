@@ -25,4 +25,16 @@ describe("createServer", () => {
     expect(response.status).toBe(403);
     expect(response.body).toEqual({ ok: false, reason: "not_found" });
   });
+
+  it("returns a clean 400 for /activate given a non-string licenseKey, instead of hanging or crashing", async () => {
+    const { privateKeyPem } = generateTestKeyPair();
+    const app = createServer({ dbPath: ":memory:", privateKeyPem });
+
+    const response = await request(app)
+      .post("/activate")
+      .send({ licenseKey: true, deviceId: "device-a" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ ok: false, reason: "bad_request" });
+  });
 });
