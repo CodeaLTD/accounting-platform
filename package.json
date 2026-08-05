@@ -13,6 +13,7 @@
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.9",
     "exceljs": "^4.4.0",
+    "jose": "^6.2.8",
     "next": "16.2.12",
     "react": "19.2.4",
     "react-dom": "19.2.4",
