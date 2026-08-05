@@ -305,7 +305,7 @@ export function DeclarationTable({
                 <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
-                    className="w-full"
+                    className="w-full editable-input"
                     aria-label={`${HEADER_ROW[1]} row ${index + 1}`}
                     value={line.commodityCode}
                     onChange={(e) =>
@@ -316,7 +316,7 @@ export function DeclarationTable({
                 <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
-                    className="w-full"
+                    className="w-full editable-input"
                     aria-label={`${HEADER_ROW[2]} row ${index + 1}`}
                     value={line.partnerCountry}
                     onChange={(e) =>
@@ -329,7 +329,7 @@ export function DeclarationTable({
                 <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
-                    className="w-full"
+                    className="w-full editable-input"
                     aria-label={`${HEADER_ROW[3]} row ${index + 1}`}
                     value={line.countryOfOrigin}
                     onChange={(e) =>
@@ -340,7 +340,7 @@ export function DeclarationTable({
                 <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
-                    className="w-full"
+                    className="w-full editable-input"
                     aria-label={`${HEADER_ROW[4]} row ${index + 1}`}
                     value={line.natureOfTransaction}
                     onChange={(e) =>
@@ -353,7 +353,7 @@ export function DeclarationTable({
                 <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
-                    className="w-full"
+                    className="w-full editable-input"
                     aria-label={`${HEADER_ROW[5]} row ${index + 1}`}
                     value={line.deliveryTerms}
                     onChange={(e) =>
@@ -364,7 +364,7 @@ export function DeclarationTable({
                 <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
-                    className="w-full"
+                    className="w-full editable-input"
                     aria-label={`${HEADER_ROW[6]} row ${index + 1}`}
                     value={line.modeOfTransport}
                     onChange={(e) =>
@@ -377,7 +377,7 @@ export function DeclarationTable({
                 <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
-                    className="w-full"
+                    className="w-full editable-input"
                     aria-label={`${HEADER_ROW[7]} row ${index + 1}`}
                     value={line.transportNationality}
                     onChange={(e) =>
@@ -390,7 +390,7 @@ export function DeclarationTable({
                 <div role="cell" className="border px-1 min-w-0">
                   <input
                     type="text"
-                    className="w-full"
+                    className="w-full editable-input"
                     aria-label={`${HEADER_ROW[8]} row ${index + 1}`}
                     value={line.regionOfConsumption}
                     onChange={(e) =>

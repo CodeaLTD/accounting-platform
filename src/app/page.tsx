@@ -182,7 +182,8 @@ export default function Home() {
       <button
         type="button"
         onClick={toggleView}
-        className="self-start cursor-pointer rounded-md bg-gray-200 px-4 py-2"
+        disabled={!workingLines}
+        className="self-start cursor-pointer rounded-md bg-[var(--button-secondary-bg)] px-4 py-2 text-[var(--button-secondary-text)] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {view === "working"
           ? MESSAGES.labels.viewFinalTableButton
