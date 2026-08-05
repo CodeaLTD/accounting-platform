@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useRef, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { HEADER_ROW, computeTotals } from "@/core/exportXlsx";
 import type { PartnerCountry, TransportMode } from "@/core/constants";
+import { toStandardDecimal } from "@/core/parseNumber";
 import type { IntrastatDeclarationLine, WorkingLine } from "@/core/types";
 import { MESSAGES } from "@/app/messages";
 
@@ -38,6 +39,94 @@ const DATA_COLUMN_WIDTHS = [
   140, // Статистическа стойност в лв
 ];
 
+/** The cells the accountant edits as numbers rather than as free text. */
+type NumericField =
+  | "netWeightKg"
+  | "supplementaryQuantity"
+  | "value"
+  | "statisticalValue";
+
+/** HEADER_ROW index for each numeric field — fixed by column order, see the
+ * comment at the top of this file. */
+const NUMERIC_HEADER_INDEX: Record<NumericField, number> = {
+  netWeightKg: 9,
+  supplementaryQuantity: 10,
+  value: 11,
+  statisticalValue: 12,
+};
+
+/** Which cell is currently being typed into, and the exact text so far. */
+interface NumericDraft {
+  row: number;
+  field: NumericField;
+  text: string;
+}
+
+function formatBgNumber(
+  value: number,
+  options: Intl.NumberFormatOptions,
+): string {
+  return value.toLocaleString("bg-BG", options);
+}
+
+// Decimal fields are shown with a comma, not a point, to match Bulgarian
+// convention — plain `<input type="number">` can't do that, so these render as
+// text inputs. Grouping is switched off deliberately: bg-BG groups thousands
+// with U+00A0, so 12345.678 would display as "12 345,678", which is not a
+// string parseNumericInput can read back — editing such a cell would blank it.
+function formatDecimal(value: number): string {
+  if (Number.isNaN(value)) return "";
+  return formatBgNumber(value, { maximumFractionDigits: 3, useGrouping: false });
+}
+
+// `Number("")` is 0, which would silently snap a cleared field to 0 while the
+// accountant is retyping it. Parse blank input as NaN instead so the field can
+// stay blank mid-edit, with hasInvalidNumericValue() blocking the export until
+// it's filled in. Accepts a comma as the decimal separator (what the fields
+// display, and what she's used to typing), and strips whitespace — including
+// the U+00A0 that bg-BG grouping produces — so pasted values still parse.
+function parseNumericInput(raw: string): number {
+  const cleaned = toStandardDecimal(raw, /\s/g);
+  if (cleaned === "") return NaN;
+  return Number(cleaned);
+}
+
+interface NumericCellProps {
+  label: string;
+  value: number;
+  /** In-progress text while this cell is being edited; null when it isn't. */
+  draft: string | null;
+  onDraftChange: (text: string) => void;
+  onDraftEnd: () => void;
+}
+
+// While a cell is being edited it renders the raw text that was typed, and
+// only reverts to the formatted value on blur. Reformatting on every keystroke
+// swallows the decimal separator the instant it's typed — "15," parses to 15,
+// which formats straight back to "15" — which made decimals impossible to
+// enter at all.
+function NumericCell({
+  label,
+  value,
+  draft,
+  onDraftChange,
+  onDraftEnd,
+}: NumericCellProps) {
+  return (
+    <div role="cell" className="border px-1 min-w-0">
+      <input
+        type="text"
+        inputMode="decimal"
+        className="w-full"
+        aria-label={label}
+        value={draft ?? formatDecimal(value)}
+        onChange={(e) => onDraftChange(e.target.value)}
+        onBlur={onDraftEnd}
+      />
+    </div>
+  );
+}
+
 interface DeclarationTableProps {
   lines: WorkingLine[];
   onLineChange: (
@@ -55,25 +144,35 @@ export function DeclarationTable({
   renderRowAction,
 }: DeclarationTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Only one cell can hold focus at a time, so a single draft slot is enough.
+  const [draft, setDraft] = useState<NumericDraft | null>(null);
 
-  // Numeric cells: `Number("")` is 0, which would silently snap a cleared
-  // field to 0 while the accountant is retyping it. Parse blank input as
-  // NaN instead, and render NaN back as an empty string so the field can
-  // stay blank mid-edit. Also accept a comma as the decimal separator,
-  // since that's what the fields display (Bulgarian convention) and what
-  // she's used to typing.
-  function parseNumericInput(raw: string): number {
-    if (raw === "") return NaN;
-    return Number(raw.replace(",", "."));
+  function draftFor(row: number, field: NumericField): string | null {
+    return draft && draft.row === row && draft.field === field
+      ? draft.text
+      : null;
   }
 
-  // Decimal fields (netWeightKg, value, statisticalValue) are shown with a
-  // comma, not a point, to match Bulgarian convention — plain `<input
-  // type="number">` can't do that, so these render as text inputs formatted
-  // via this helper and reparsed by parseNumericInput above.
-  function formatDecimal(value: number): string {
-    if (Number.isNaN(value)) return "";
-    return value.toLocaleString("bg-BG", { maximumFractionDigits: 3 });
+  function handleNumericChange(
+    row: number,
+    field: NumericField,
+    text: string,
+  ) {
+    setDraft({ row, field, text });
+    onLineChange(row, { [field]: parseNumericInput(text) });
+  }
+
+  function numericCellProps(
+    index: number,
+    field: NumericField,
+  ): NumericCellProps {
+    return {
+      label: `${HEADER_ROW[NUMERIC_HEADER_INDEX[field]]} row ${index + 1}`,
+      value: lines[index][field],
+      draft: draftFor(index, field),
+      onDraftChange: (text) => handleNumericChange(index, field, text),
+      onDraftEnd: () => setDraft(null),
+    };
   }
 
   const totals = useMemo(() => computeTotals(lines), [lines]);
@@ -82,7 +181,7 @@ export function DeclarationTable({
   // Round to the same precision the accountant enters before formatting, so
   // the on-screen total matches what she'd get adding the column by hand.
   function formatTotal(value: number, maximumFractionDigits: number): string {
-    return value.toLocaleString("bg-BG", { maximumFractionDigits });
+    return formatBgNumber(value, { maximumFractionDigits });
   }
 
   // Leading columns before HEADER_ROW's own 13 columns: the row action
@@ -301,64 +400,14 @@ export function DeclarationTable({
                     }
                   />
                 </div>
-                <div role="cell" className="border px-1 min-w-0">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="w-full editable-input"
-                    aria-label={`${HEADER_ROW[9]} row ${index + 1}`}
-                    value={formatDecimal(line.netWeightKg)}
-                    onChange={(e) =>
-                      onLineChange(index, {
-                        netWeightKg: parseNumericInput(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-                <div role="cell" className="border px-1 min-w-0">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="w-full editable-input"
-                    aria-label={`${HEADER_ROW[10]} row ${index + 1}`}
-                    value={formatDecimal(line.supplementaryQuantity)}
-                    onChange={(e) =>
-                      onLineChange(index, {
-                        supplementaryQuantity: parseNumericInput(
-                          e.target.value,
-                        ),
-                      })
-                    }
-                  />
-                </div>
-                <div role="cell" className="border px-1 min-w-0">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="w-full editable-input"
-                    aria-label={`${HEADER_ROW[11]} row ${index + 1}`}
-                    value={formatDecimal(line.value)}
-                    onChange={(e) =>
-                      onLineChange(index, {
-                        value: parseNumericInput(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-                <div role="cell" className="border px-1 min-w-0">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="w-full editable-input"
-                    aria-label={`${HEADER_ROW[12]} row ${index + 1}`}
-                    value={formatDecimal(line.statisticalValue)}
-                    onChange={(e) =>
-                      onLineChange(index, {
-                        statisticalValue: parseNumericInput(e.target.value),
-                      })
-                    }
-                  />
-                </div>
+                <NumericCell {...numericCellProps(index, "netWeightKg")} />
+                <NumericCell
+                  {...numericCellProps(index, "supplementaryQuantity")}
+                />
+                <NumericCell {...numericCellProps(index, "value")} />
+                <NumericCell
+                  {...numericCellProps(index, "statisticalValue")}
+                />
               </div>
               );
               })}

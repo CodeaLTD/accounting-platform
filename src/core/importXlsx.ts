@@ -1,7 +1,11 @@
 import * as XLSX from "xlsx";
 import { parseBgNumber } from "./parseNumber";
 import type { SourceInvoiceLine } from "./types";
-import { makeColumnReader } from "./xlsxColumns";
+import {
+  makeRawColumnReader,
+  type RawColumnReader,
+  type SheetCell,
+} from "./xlsxColumns";
 
 /**
  * Parses a source invoice workbook (same structure as the accountant's
@@ -15,32 +19,48 @@ export function parseSourceInvoiceWorkbook(
 ): SourceInvoiceLine[] {
   const workbook =
     data instanceof ArrayBuffer
-      ? XLSX.read(new Uint8Array(data), { type: "array", codepage: 1251 })
-      : XLSX.read(data, { type: "buffer", codepage: 1251 });
+      ? XLSX.read(new Uint8Array(data), {
+          type: "array",
+          codepage: 1251,
+          cellDates: true,
+        })
+      : XLSX.read(data, { type: "buffer", codepage: 1251, cellDates: true });
   const sheetName = options?.sheetName ?? workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) {
     throw new Error(`Sheet not found: "${sheetName}"`);
   }
 
-  const rows = XLSX.utils.sheet_to_json<(string | number)[]>(sheet, {
+  const rows = XLSX.utils.sheet_to_json<SheetCell[]>(sheet, {
     header: 1,
     defval: "",
   });
   const [header, ...dataRows] = rows;
-  const col = makeColumnReader(header);
+  const rawCol = makeRawColumnReader(header);
 
   return dataRows
     .filter((row) => row.some((cell) => cell !== ""))
-    .map((row) => rowToSourceInvoiceLine(row, col));
+    .map((row) => rowToSourceInvoiceLine(row, rawCol));
 }
 
 function rowToSourceInvoiceLine(
-  row: (string | number)[],
-  col: (row: (string | number)[], name: string) => string,
+  row: SheetCell[],
+  rawCol: RawColumnReader,
 ): SourceInvoiceLine {
-  const c = (name: string) => col(row, name);
-  const n = (name: string) => parseBgNumber(c(name));
+  const c = (name: string) => String(rawCol(row, name));
+  // Numeric columns read the raw cell, not the stringified one — see
+  // parseBgNumber for why stringifying a genuine number first corrupts it.
+  const n = (name: string) => parseBgNumber(rawCol(row, name) as string | number);
+  // Same reasoning applies to dates: today's reference file stores these as
+  // text, but a genuine Excel date cell (cellDates: true, above) comes back
+  // as a Date, not a string — stringifying that directly would emit its
+  // full Date#toString() rather than a plain date.
+  const d = (name: string) => {
+    const value = rawCol(row, name);
+    return value instanceof Date
+      ? value.toISOString().slice(0, 10)
+      : String(value);
+  };
   return {
     customerCode: c("Customer Code"),
     documentType: c("Document type"),
@@ -49,10 +69,10 @@ function rowToSourceInvoiceLine(
     sublineNumber: c("Subline number"),
     invoiceNumber: c("Invoice Number"),
     invoiceLine: c("Invoice line"),
-    invoiceDate: c("Invoice Date"),
-    invoiceDueDate: c("Invoice due date"),
+    invoiceDate: d("Invoice Date"),
+    invoiceDueDate: d("Invoice due date"),
     deliveryDocument: c("Delivery document"),
-    deliveryDocumentDate: c("Delivery document date"),
+    deliveryDocumentDate: d("Delivery document date"),
     partNumber: c("Part Number"),
     partDescription: c("Part description"),
     carrierCode: c("Carrier Code"),

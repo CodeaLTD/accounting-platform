@@ -1,7 +1,30 @@
+import { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { WorkingLine } from "@/core/types";
+import type { IntrastatDeclarationLine, WorkingLine } from "@/core/types";
 import { DeclarationTable } from "./DeclarationTable";
+
+/**
+ * Wires the table to its own state the way page.tsx does, so an edit feeds
+ * back in through `lines`. The numeric-input bugs below only surface once a
+ * keystroke round-trips through the parent and gets reformatted.
+ */
+function ControlledTable({ initial }: { initial: WorkingLine[] }) {
+  const [lines, setLines] = useState(initial);
+  return (
+    <DeclarationTable
+      lines={lines}
+      onLineChange={(index: number, patch: Partial<IntrastatDeclarationLine>) =>
+        setLines((prev) =>
+          prev.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+        )
+      }
+      showInvoiceNumber={false}
+      renderRowAction={() => null}
+    />
+  );
+}
 
 const sampleLines: WorkingLine[] = [
   {
@@ -113,6 +136,80 @@ describe("DeclarationTable", () => {
     expect(onLineChange).toHaveBeenCalledWith(0, {
       supplementaryQuantity: 12,
     });
+  });
+
+  // Regression: the cell used to reformat on every keystroke, so the decimal
+  // separator was swallowed the instant it was typed ("15," parses to 15,
+  // which formats back to "15"). Net weight carries 3 decimals, so this made
+  // the column effectively integer-only.
+  it("keeps the decimal separator while a decimal is being typed", async () => {
+    const user = userEvent.setup();
+    render(<ControlledTable initial={sampleLines} />);
+
+    const netWeightInput = screen.getByLabelText("Нето тегло в кг row 1");
+    await user.clear(netWeightInput);
+    await user.type(netWeightInput, "0,085");
+
+    expect(netWeightInput).toHaveValue("0,085");
+
+    // On blur the draft is dropped and the committed number is reformatted —
+    // which must round-trip to the same text.
+    await user.tab();
+    expect(netWeightInput).toHaveValue("0,085");
+  });
+
+  it("commits the parsed number as a decimal is typed", () => {
+    const onLineChange = vi.fn();
+    render(
+      <DeclarationTable
+        lines={sampleLines}
+        onLineChange={onLineChange}
+        showInvoiceNumber={false}
+        renderRowAction={() => null}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Нето тегло в кг row 1"), {
+      target: { value: "0,085" },
+    });
+
+    expect(onLineChange).toHaveBeenCalledWith(0, { netWeightKg: 0.085 });
+  });
+
+  // Regression: bg-BG groups thousands with U+00A0, so 12345.678 displayed as
+  // "12 345,678" — which parsed straight back to NaN, blanking the cell and
+  // blocking the download the moment the accountant touched it.
+  it("renders a five-digit value without a grouping separator, and keeps it editable", async () => {
+    const user = userEvent.setup();
+    render(
+      <ControlledTable
+        initial={[{ ...sampleLines[0], value: 12345.678 }]}
+      />,
+    );
+
+    const valueInput = screen.getByLabelText("Стойност в лв row 1");
+    expect(valueInput).toHaveValue("12345,678");
+
+    await user.type(valueInput, "9");
+    expect(valueInput).toHaveValue("12345,6789");
+  });
+
+  it("parses a value that still carries grouping spaces, e.g. when pasted", () => {
+    const onLineChange = vi.fn();
+    render(
+      <DeclarationTable
+        lines={sampleLines}
+        onLineChange={onLineChange}
+        showInvoiceNumber={false}
+        renderRowAction={() => null}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Стойност в лв row 1"), {
+      target: { value: "12 345,678" },
+    });
+
+    expect(onLineChange).toHaveBeenCalledWith(0, { value: 12345.678 });
   });
 
   it("shows the invoice number column when showInvoiceNumber is true", () => {
