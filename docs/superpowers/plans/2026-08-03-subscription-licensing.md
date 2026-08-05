@@ -14,7 +14,7 @@
 - The license server is a separate deployable unit, not part of the Next.js app — lives in a new top-level `license-server/` directory with its own `package.json`. It's hosted at a custom domain the company already owns; this plan doesn't set up DNS/TLS/hosting itself (see Follow-ups), but the future Tauri adapter will point at that base URL for `/activate` and `/refresh`.
 - One accountant client for now: license keys are created manually via an admin CLI script, not a self-serve signup flow. Default seat limit is 1 device per license.
 - No payment processor. A license is "active" purely based on `paidUntil`, a paid-through timestamp set at creation and updated on renewal — both via admin CLI, both by hand, whenever the client pays directly. There is no automatic billing, dunning, or proration; a multi-year prepayment is handled the exact same way as a 1-month one, just with a `paidUntil` further in the future.
-- No email-based ownership check for now — dropped pending a look at the actual phone-home URL/interface, which may already cover this. Cheap to add back later if needed: it would only touch Task 1's schema and Task 3's `/activate` handler, since `/refresh` and the framework-agnostic client library (Tasks 7-8) don't reference identity at all.
+- No email-based ownership check in this plan — deferred, not dropped. Leadership has since confirmed the phone-home URL flow *will* require email, but the flow itself isn't available yet to build against. Only touches Task 1's schema and Task 3's `/activate` handler when added (`/refresh` and the framework-agnostic client library, Tasks 7-8, don't reference identity at all), so it's a follow-up task once the real interface is known — see Follow-ups.
 - Token lifetime is 14 days; the offline grace period after expiry is 10 days before the app must lock out. (Matches the previously-agreed 7–14 day range.) These numbers are intentionally unchanged from the original design — see the note on the `locked` state in Task 8: a "locked" client is not a client that must re-enter its license key, it's one that needs a single successful reconnect, so long offline stretches (e.g. a client on extended leave) resolve themselves the moment the app is opened with a network connection, without any user action.
 - Use `jose` for all JWT signing/verification — do not hand-roll JWT parsing or crypto.
 - This plan does not touch Tauri scaffolding, the license-key-entry UI, or an admin dashboard — see "Follow-ups" at the end.
@@ -29,6 +29,7 @@
 - Secure token storage on disk (Tauri's filesystem/secure-storage APIs) — this plan defines a `LicenseStorage` interface but only ships an in-memory reference implementation for tests.
 - An admin dashboard beyond the one-shot CLI scripts for creating/extending a license.
 - DNS/TLS/process-hosting setup for `license-server` at the company's custom domain (the domain itself is already available; wiring it up is a deployment task, not a code task).
+- Adding the email-based ownership check confirmed as required by the phone-home URL flow — blocked on seeing that flow's actual interface. When it lands: add an `email` column to Task 1's schema, an `email` param + `email_mismatch` reason to Task 3's `handleActivate`, and an `<email>` arg to Task 6's `createLicense.ts` CLI. `/refresh` and Tasks 7-8 are unaffected.
 
 ---
 
