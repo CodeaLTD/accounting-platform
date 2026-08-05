@@ -17,6 +17,6 @@ export function computeLicenseStatus(params: ComputeLicenseStatusParams): Licens
   if (params.now <= tokenExpiresAtMs) return "valid";
 
   if (params.lastRefreshAt === null) return "locked";
-  const graceDeadline = params.lastRefreshAt + GRACE_PERIOD_MS;
+  const graceDeadline = tokenExpiresAtMs + GRACE_PERIOD_MS;
   return params.now <= graceDeadline ? "grace" : "locked";
 }

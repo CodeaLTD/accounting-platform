@@ -23,23 +23,31 @@ describe("computeLicenseStatus", () => {
     ).toBe("valid");
   });
 
-  it("is in grace when expired but within 10 days of the last successful refresh", () => {
-    const payload = payloadExpiringAt(Math.floor((NOW - ONE_DAY_MS) / 1000));
+  it("is in grace when expired but within 10 days of the token's own expiry", () => {
+    // Server issues a fresh token at each successful refresh, with
+    // expiresAt = lastRefreshAt + 14 days. Model that here instead of
+    // pretending expiresAt ~= lastRefreshAt.
+    const lastRefreshAt = NOW - 15 * ONE_DAY_MS;
+    const expiresAtMs = lastRefreshAt + 14 * ONE_DAY_MS; // NOW - 1 day
+    const payload = payloadExpiringAt(Math.floor(expiresAtMs / 1000));
     expect(
       computeLicenseStatus({
         payload,
-        lastRefreshAt: NOW - ONE_DAY_MS,
+        lastRefreshAt,
         now: NOW,
       }),
     ).toBe("grace");
   });
 
   it("is locked once past the 10-day grace deadline", () => {
-    const payload = payloadExpiringAt(Math.floor((NOW - 11 * ONE_DAY_MS) / 1000));
+    const lastRefreshAt = NOW - 25 * ONE_DAY_MS;
+    const expiresAtMs = lastRefreshAt + 14 * ONE_DAY_MS; // NOW - 11 days
+    // grace deadline = expiresAt + 10 days = NOW - 1 day, so NOW is past it
+    const payload = payloadExpiringAt(Math.floor(expiresAtMs / 1000));
     expect(
       computeLicenseStatus({
         payload,
-        lastRefreshAt: NOW - 11 * ONE_DAY_MS,
+        lastRefreshAt,
         now: NOW,
       }),
     ).toBe("locked");
