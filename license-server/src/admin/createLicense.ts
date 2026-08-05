@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { openDb, createLicense } from "../db";
+import { openDb, createLicense } from "../db.js";
 
 export function generateLicenseKey(): string {
   return `INTRA-${randomBytes(8).toString("hex").toUpperCase()}`;

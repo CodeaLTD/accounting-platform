@@ -4,8 +4,8 @@ import {
   getLicense,
   isDeviceRegistered,
   registerDevice,
-} from "../db";
-import { issueLicenseToken } from "../token";
+} from "../db.js";
+import { issueLicenseToken } from "../token.js";
 
 export interface ActivateRequest {
   licenseKey: string;

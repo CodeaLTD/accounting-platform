@@ -1,4 +1,4 @@
-import { openDb, setLicenseExpiry, setSeatLimit } from "../db";
+import { openDb, setLicenseExpiry, setSeatLimit } from "../db.js";
 
 function main() {
   const [, , dbPath, licenseKey, paidUntilArg, seatLimitArg] = process.argv;

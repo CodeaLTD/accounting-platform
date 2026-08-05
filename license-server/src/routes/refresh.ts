@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
-import { getLicense, isDeviceRegistered } from "../db";
-import { issueLicenseToken } from "../token";
+import { getLicense, isDeviceRegistered } from "../db.js";
+import { issueLicenseToken } from "../token.js";
 
 export interface RefreshRequest {
   licenseKey: string;
