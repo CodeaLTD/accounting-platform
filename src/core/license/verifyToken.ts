@@ -7,7 +7,7 @@ export async function verifyLicenseToken(
 ): Promise<LicensePayload | null> {
   try {
     const publicKey = await importSPKI(publicKeyPem, "RS256");
-    const { payload } = await jwtVerify(token, publicKey);
+    const { payload } = await jwtVerify(token, publicKey, { algorithms: ["RS256"] });
 
     if (
       typeof payload.sub !== "string" ||

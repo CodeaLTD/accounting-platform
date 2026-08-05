@@ -14,11 +14,17 @@ function main() {
     );
     process.exit(1);
   }
+  const paidUntil = new Date(paidUntilArg).getTime();
+  if (Number.isNaN(paidUntil)) {
+    console.error(`Invalid date: ${paidUntilArg}`);
+    process.exit(1);
+  }
+
   const db = openDb(dbPath);
   const licenseKey = generateLicenseKey();
   createLicense(db, {
     licenseKey,
-    paidUntil: new Date(paidUntilArg).getTime(),
+    paidUntil,
     seatLimit: seatLimitArg ? Number(seatLimitArg) : 1,
   });
   console.log(licenseKey);

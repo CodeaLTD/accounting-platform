@@ -9,8 +9,14 @@ function main() {
     );
     process.exit(1);
   }
+  const paidUntil = new Date(paidUntilArg).getTime();
+  if (Number.isNaN(paidUntil)) {
+    console.error(`Invalid date: ${paidUntilArg}`);
+    process.exit(1);
+  }
+
   const db = openDb(dbPath);
-  setLicenseExpiry(db, licenseKey, new Date(paidUntilArg).getTime());
+  setLicenseExpiry(db, licenseKey, paidUntil);
   if (seatLimitArg) {
     setSeatLimit(db, licenseKey, Number(seatLimitArg));
   }
