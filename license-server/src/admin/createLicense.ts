@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { openDb, createLicense } from "../db.js";
 
 export function generateLicenseKey(): string {
@@ -24,7 +25,9 @@ function main() {
 }
 
 // Only run when invoked directly (`node`/`tsx` on this file), not when
-// imported by the test above.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// imported by the test above. Compare via pathToFileURL rather than a raw
+// `file://${...}` template, since process.argv[1] is a Windows-style path
+// (C:\...) that never string-equals a file:// URL (file:///C:/...).
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main();
 }

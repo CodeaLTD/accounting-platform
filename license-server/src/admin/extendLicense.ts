@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import { openDb, setLicenseExpiry, setSeatLimit } from "../db.js";
 
 function main() {
@@ -19,6 +20,8 @@ function main() {
   );
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// See createLicense.ts for why pathToFileURL is used instead of a raw
+// `file://${...}` comparison (Windows path vs file:// URL never match).
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main();
 }
