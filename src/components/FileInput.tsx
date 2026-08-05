@@ -44,8 +44,8 @@ export function FileInput({
       {MESSAGES.labels.fileInput}
       <span className="flex items-center gap-2">
         <span
-          className={`cursor-pointer rounded px-3 py-1 text-white ${
-            disabled ? "bg-gray-400" : "bg-blue-600"
+          className={`rounded px-3 py-1 text-white ${
+            disabled ? "cursor-not-allowed bg-gray-400" : "cursor-pointer bg-blue-600"
           }`}
         >
           {MESSAGES.labels.chooseFileButton}

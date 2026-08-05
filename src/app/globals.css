@@ -6,6 +6,8 @@
   /* Lets the browser theme native controls (select, option, input, scrollbars)
      to match light/dark mode on its own, instead of us hand-coloring them. */
   color-scheme: light dark;
+  --button-secondary-bg: #e5e7eb;
+  --button-secondary-text: #171717;
 }
 
 @theme inline {
@@ -19,6 +21,8 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --button-secondary-bg: #374151;
+    --button-secondary-text: #ededed;
   }
 }
 
@@ -28,12 +32,16 @@
   --background: #ffffff;
   --foreground: #171717;
   color-scheme: light;
+  --button-secondary-bg: #e5e7eb;
+  --button-secondary-text: #171717;
 }
 
 :root[data-theme="dark"] {
   --background: #0a0a0a;
   --foreground: #ededed;
   color-scheme: dark;
+  --button-secondary-bg: #374151;
+  --button-secondary-text: #ededed;
 }
 
 body {
@@ -53,4 +61,15 @@ select {
 
 select option {
   color: #171717;
+}
+
+/* Signals that a NAP table cell is directly editable, since a plain text
+   input otherwise looks identical to read-only text. A pencil isn't a
+   built-in CSS cursor keyword, so this is a small inline SVG rather than a
+   font/library dependency. */
+.editable-input:hover {
+  cursor:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24'><path d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z' fill='%23000000' stroke='%23ffffff' stroke-width='1.5'/></svg>")
+    2 20,
+    text;
 }
