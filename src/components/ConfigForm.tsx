@@ -53,8 +53,8 @@ export function ConfigForm({ value, onChange }: ConfigFormProps) {
         <Label>{MESSAGES.labels.partnerCountry}</Label>
         <Select
           value={value.partnerCountry}
-          onValueChange={(next: PartnerCountry) =>
-            onChange({ ...value, partnerCountry: next })
+          onValueChange={(next: PartnerCountry | "" | null) =>
+            onChange({ ...value, partnerCountry: next ?? "" })
           }
         >
           <SelectTrigger aria-label={MESSAGES.labels.partnerCountry}>
@@ -79,8 +79,8 @@ export function ConfigForm({ value, onChange }: ConfigFormProps) {
         <Label>{MESSAGES.labels.modeOfTransport}</Label>
         <Select
           value={value.modeOfTransport}
-          onValueChange={(next: TransportMode) =>
-            onChange({ ...value, modeOfTransport: next })
+          onValueChange={(next: TransportMode | "" | null) =>
+            onChange({ ...value, modeOfTransport: next ?? "" })
           }
         >
           <SelectTrigger aria-label={MESSAGES.labels.modeOfTransport}>
@@ -105,8 +105,8 @@ export function ConfigForm({ value, onChange }: ConfigFormProps) {
         <Label>{MESSAGES.labels.regionOfConsumption}</Label>
         <Select
           value={value.regionOfConsumption}
-          onValueChange={(next: RegionOfConsumption) =>
-            onChange({ ...value, regionOfConsumption: next })
+          onValueChange={(next: RegionOfConsumption | "" | null) =>
+            onChange({ ...value, regionOfConsumption: next ?? "" })
           }
         >
           <SelectTrigger aria-label={MESSAGES.labels.regionOfConsumption}>
