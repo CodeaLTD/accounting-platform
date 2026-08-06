@@ -117,7 +117,7 @@ function NumericCell({
       <input
         type="text"
         inputMode="decimal"
-        className="w-full"
+        className="w-full editable-input"
         aria-label={label}
         value={draft ?? formatDecimal(value)}
         onChange={(e) => onDraftChange(e.target.value)}
