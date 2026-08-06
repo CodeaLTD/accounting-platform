@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   ConfigForm,
   EMPTY_CONFIG_FORM_VALUE,
@@ -180,26 +181,27 @@ export default function Home() {
         <SearchBar value={searchQuery} onChange={setSearchQuery} />
       )}
       <ErrorBanner message={error} />
-      <button
+      <Button
         type="button"
+        variant="secondary"
         onClick={toggleView}
         disabled={!workingLines}
-        className="self-start cursor-pointer rounded-md bg-[var(--button-secondary-bg)] px-4 py-2 text-[var(--button-secondary-text)] disabled:cursor-not-allowed disabled:opacity-50"
+        className="self-start px-4 py-2"
       >
         {view === "working"
           ? MESSAGES.labels.viewFinalTableButton
           : MESSAGES.labels.viewWorkingTableButton}
-      </button>
+      </Button>
       {view === "working" && workingLines && (
         <>
-          <button
+          <Button
             type="button"
             onClick={handleAddAllVisible}
             disabled={filteredWorkingLines.length === 0}
-            className="self-start cursor-pointer rounded-md bg-green-600 px-4 py-2 text-white disabled:opacity-50"
+            className="self-start bg-green-600 px-4 py-2 text-white hover:bg-green-700"
           >
             {MESSAGES.labels.addAllButton}
-          </button>
+          </Button>
           <DeclarationTable
             lines={filteredWorkingLines}
             onLineChange={handleWorkingLineChange}
@@ -219,14 +221,14 @@ export default function Home() {
       )}
       {view === "final" && (
         <>
-          <button
+          <Button
             type="button"
             onClick={handleRemoveAllRows}
             disabled={finalLines.length === 0}
-            className="self-start cursor-pointer rounded-md bg-red-600 px-4 py-2 text-white disabled:opacity-50"
+            className="self-start bg-red-600 px-4 py-2 text-white hover:bg-red-700"
           >
             {MESSAGES.labels.removeAllButton}
-          </button>
+          </Button>
           <DeclarationTable
             lines={finalLines}
             onLineChange={handleFinalLineChange}
