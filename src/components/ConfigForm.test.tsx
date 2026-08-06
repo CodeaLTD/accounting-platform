@@ -39,10 +39,8 @@ describe("ConfigForm", () => {
       <ConfigForm value={EMPTY_CONFIG_FORM_VALUE} onChange={handleChange} />,
     );
 
-    await user.selectOptions(
-      screen.getByLabelText(MESSAGES.labels.partnerCountry),
-      "IT",
-    );
+    await user.click(screen.getByLabelText(MESSAGES.labels.partnerCountry));
+    await user.click(await screen.findByRole("option", { name: "IT" }));
 
     expect(handleChange).toHaveBeenCalledWith({
       ...EMPTY_CONFIG_FORM_VALUE,
@@ -57,10 +55,10 @@ describe("ConfigForm", () => {
       <ConfigForm value={EMPTY_CONFIG_FORM_VALUE} onChange={handleChange} />,
     );
 
-    await user.selectOptions(
+    await user.click(
       screen.getByLabelText(MESSAGES.labels.regionOfConsumption),
-      "SZR",
     );
+    await user.click(await screen.findByRole("option", { name: "Стара Загора" }));
 
     expect(handleChange).toHaveBeenCalledWith({
       ...EMPTY_CONFIG_FORM_VALUE,

@@ -1,6 +1,14 @@
 "use client";
 
 import { MESSAGES } from "@/app/messages";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   PARTNER_COUNTRIES,
   REGIONS_OF_CONSUMPTION,
@@ -42,27 +50,24 @@ export function ConfigForm({ value, onChange }: ConfigFormProps) {
   return (
     <fieldset className="flex flex-col gap-4 sm:flex-row">
       <div className="flex flex-col gap-1">
-        <label className="flex flex-col gap-1">
-          {MESSAGES.labels.partnerCountry}
-          <select
-            value={value.partnerCountry}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                partnerCountry: e.target.value as PartnerCountry,
-              })
-            }
-          >
-            <option value="" disabled>
-              —
-            </option>
+        <Label>{MESSAGES.labels.partnerCountry}</Label>
+        <Select
+          value={value.partnerCountry}
+          onValueChange={(next: PartnerCountry) =>
+            onChange({ ...value, partnerCountry: next })
+          }
+        >
+          <SelectTrigger aria-label={MESSAGES.labels.partnerCountry}>
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
+          <SelectContent>
             {PARTNER_COUNTRIES.map((code) => (
-              <option key={code} value={code}>
+              <SelectItem key={code} value={code}>
                 {code}
-              </option>
+              </SelectItem>
             ))}
-          </select>
-        </label>
+          </SelectContent>
+        </Select>
         <span
           className={`text-sm text-red-600 ${value.partnerCountry === "" ? "" : "invisible"}`}
         >
@@ -71,27 +76,24 @@ export function ConfigForm({ value, onChange }: ConfigFormProps) {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="flex flex-col gap-1">
-          {MESSAGES.labels.modeOfTransport}
-          <select
-            value={value.modeOfTransport}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                modeOfTransport: e.target.value as TransportMode,
-              })
-            }
-          >
-            <option value="" disabled>
-              —
-            </option>
+        <Label>{MESSAGES.labels.modeOfTransport}</Label>
+        <Select
+          value={value.modeOfTransport}
+          onValueChange={(next: TransportMode) =>
+            onChange({ ...value, modeOfTransport: next })
+          }
+        >
+          <SelectTrigger aria-label={MESSAGES.labels.modeOfTransport}>
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
+          <SelectContent>
             {TRANSPORT_MODES.map((code) => (
-              <option key={code} value={code}>
+              <SelectItem key={code} value={code}>
                 {code}
-              </option>
+              </SelectItem>
             ))}
-          </select>
-        </label>
+          </SelectContent>
+        </Select>
         <span
           className={`text-sm text-red-600 ${value.modeOfTransport === "" ? "" : "invisible"}`}
         >
@@ -100,27 +102,24 @@ export function ConfigForm({ value, onChange }: ConfigFormProps) {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="flex flex-col gap-1">
-          {MESSAGES.labels.regionOfConsumption}
-          <select
-            value={value.regionOfConsumption}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                regionOfConsumption: e.target.value as RegionOfConsumption,
-              })
-            }
-          >
-            <option value="" disabled>
-              —
-            </option>
+        <Label>{MESSAGES.labels.regionOfConsumption}</Label>
+        <Select
+          value={value.regionOfConsumption}
+          onValueChange={(next: RegionOfConsumption) =>
+            onChange({ ...value, regionOfConsumption: next })
+          }
+        >
+          <SelectTrigger aria-label={MESSAGES.labels.regionOfConsumption}>
+            <SelectValue placeholder="—" />
+          </SelectTrigger>
+          <SelectContent>
             {REGIONS_OF_CONSUMPTION.map(({ code, label }) => (
-              <option key={code} value={code}>
+              <SelectItem key={code} value={code}>
                 {label}
-              </option>
+              </SelectItem>
             ))}
-          </select>
-        </label>
+          </SelectContent>
+        </Select>
         <span
           className={`text-sm text-red-600 ${value.regionOfConsumption === "" ? "" : "invisible"}`}
         >
