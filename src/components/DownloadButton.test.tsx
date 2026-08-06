@@ -123,6 +123,25 @@ describe("DownloadButton", () => {
     expect(writeFileMock).not.toHaveBeenCalled();
   });
 
+  it("reports an error via onError when writing the file fails", async () => {
+    isTauriMock.mockReturnValue(true);
+    saveMock.mockResolvedValue("C:\\Users\\test\\Documents\\my-export.xlsx");
+    writeFileMock.mockRejectedValue(new Error("disk full"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const onError = vi.fn();
+
+    const user = userEvent.setup();
+    render(<DownloadButton lines={sampleLines} onError={onError} />);
+
+    await user.click(
+      screen.getByRole("button", { name: MESSAGES.labels.downloadButton }),
+    );
+
+    await waitFor(() =>
+      expect(onError).toHaveBeenCalledWith(MESSAGES.errors.saveFailed),
+    );
+  });
+
   it("is disabled when there are no lines", () => {
     render(<DownloadButton lines={[]} />);
     expect(

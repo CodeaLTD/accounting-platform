@@ -21,7 +21,11 @@ export default defineConfig({
         test: {
           name: "jsdom",
           environment: "jsdom",
-          include: ["src/components/**/*.test.ts?(x)", "src/app/**/*.test.ts?(x)"],
+          include: [
+            "src/components/**/*.test.ts?(x)",
+            "src/app/**/*.test.ts?(x)",
+            "src/platform/**/*.test.ts?(x)",
+          ],
           setupFiles: ["./vitest.setup.ts"],
         },
         resolve: {

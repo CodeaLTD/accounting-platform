@@ -9,6 +9,8 @@ export const MESSAGES = {
     emptyFile: "В този файл не бяха намерени редове с фактури.",
     invalidNumericValue:
       "Моля, попълнете всички числови полета преди изтегляне.",
+    saveFailed:
+      "Файлът не можа да бъде запазен. Моля, опитайте отново.",
     selectPartnerCountry: "Изберете страна партньор",
     selectModeOfTransport: "Изберете вид транспорт",
     selectRegionOfConsumption: "Изберете регион на потребление",

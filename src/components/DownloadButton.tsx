@@ -10,6 +10,7 @@ import type { IntrastatDeclarationLine } from "@/core/types";
 interface DownloadButtonProps {
   lines: IntrastatDeclarationLine[];
   disabled?: boolean;
+  onError?: (message: string) => void;
 }
 
 const MIME_TYPE =
@@ -37,13 +38,22 @@ function saveViaBrowser(bytes: Uint8Array<ArrayBuffer>) {
   URL.revokeObjectURL(url);
 }
 
-export function DownloadButton({ lines, disabled }: DownloadButtonProps) {
+export function DownloadButton({
+  lines,
+  disabled,
+  onError,
+}: DownloadButtonProps) {
   async function handleClick() {
     const bytes = await intrastatWorkbookToUint8Array(lines);
-    if (isTauri()) {
-      await saveViaTauri(bytes);
-    } else {
-      saveViaBrowser(bytes);
+    try {
+      if (isTauri()) {
+        await saveViaTauri(bytes);
+      } else {
+        saveViaBrowser(bytes);
+      }
+    } catch (err) {
+      console.error(err);
+      onError?.(MESSAGES.errors.saveFailed);
     }
   }
 

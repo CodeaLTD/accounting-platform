@@ -16,6 +16,7 @@ import { parseSourceInvoiceWorkbook } from "@/core/importXlsx";
 import { mapInvoiceLinesToDeclaration } from "@/core/mapping";
 import type { IntrastatDeclarationLine, WorkingLine } from "@/core/types";
 import { hasInvalidNumericValue } from "@/core/validateLines";
+import { confirmDialog } from "@/platform/dialog";
 import { MESSAGES } from "./messages";
 
 type View = "working" | "final";
@@ -35,7 +36,7 @@ export default function Home() {
   async function handleFileSelected(file: File) {
     if (!isConfigComplete(configValue)) return;
     if (workingLines && workingLines.length > 0) {
-      const confirmed = window.confirm(
+      const confirmed = await confirmDialog(
         MESSAGES.confirmations.discardUnaddedRows(workingLines.length),
       );
       if (!confirmed) return;
@@ -241,7 +242,11 @@ export default function Home() {
               </button>
             )}
           />
-          <DownloadButton lines={finalLines} disabled={hasInvalidValues} />
+          <DownloadButton
+            lines={finalLines}
+            disabled={hasInvalidValues}
+            onError={setError}
+          />
           {hasInvalidValues && (
             <p role="alert" className="text-sm text-red-600">
               {MESSAGES.errors.invalidNumericValue}
