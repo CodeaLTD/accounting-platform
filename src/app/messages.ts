@@ -28,8 +28,8 @@ export const MESSAGES = {
     addRowButton: "Добави ред",
     removeRowButton: "Премахни ред",
     removeAllButton: "Премахни всички",
-    viewFinalTableButton: "виж НАП таблицата",
-    viewWorkingTableButton: "виж работната таблица",
+    viewFinalTableButton: "Виж НАП таблицата",
+    viewWorkingTableButton: "Виж работната таблица",
   },
   files: {
     downloadFileName: "intrastat-declaration.xlsx",
