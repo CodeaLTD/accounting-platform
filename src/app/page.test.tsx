@@ -170,19 +170,19 @@ function buildSecondInvoiceFile(): File {
   return buildXlsxFile(rows, "second-invoice.xlsx");
 }
 
+async function selectOption(
+  user: ReturnType<typeof userEvent.setup>,
+  triggerLabel: string,
+  optionName: string,
+) {
+  await user.click(screen.getByLabelText(triggerLabel));
+  await user.click(await screen.findByRole("option", { name: optionName }));
+}
+
 async function fillConfig(user: ReturnType<typeof userEvent.setup>) {
-  await user.selectOptions(
-    screen.getByLabelText(MESSAGES.labels.partnerCountry),
-    "IT",
-  );
-  await user.selectOptions(
-    screen.getByLabelText(MESSAGES.labels.modeOfTransport),
-    "3",
-  );
-  await user.selectOptions(
-    screen.getByLabelText(MESSAGES.labels.regionOfConsumption),
-    "SZR",
-  );
+  await selectOption(user, MESSAGES.labels.partnerCountry, "IT");
+  await selectOption(user, MESSAGES.labels.modeOfTransport, "3");
+  await selectOption(user, MESSAGES.labels.regionOfConsumption, "Стара Загора");
 }
 
 describe("Home page", () => {
