@@ -15,7 +15,7 @@ interface DownloadButtonProps {
 const MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-async function saveViaTauri(bytes: Uint8Array) {
+async function saveViaTauri(bytes: Uint8Array<ArrayBuffer>) {
   const path = await save({
     defaultPath: MESSAGES.files.downloadFileName,
     filters: [{ name: "Excel", extensions: ["xlsx"] }],
@@ -25,7 +25,7 @@ async function saveViaTauri(bytes: Uint8Array) {
   }
 }
 
-function saveViaBrowser(bytes: Uint8Array) {
+function saveViaBrowser(bytes: Uint8Array<ArrayBuffer>) {
   const blob = new Blob([bytes], { type: MIME_TYPE });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
