@@ -43,9 +43,9 @@ export default function RootLayout({
     <html
       lang="bg"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-      // The theme script below sets data-theme on the client before
+      // The theme script below sets the .dark class on the client before
       // hydration, which legitimately differs from the server-rendered
-      // markup (which has no data-theme yet) — this is expected, not a bug.
+      // markup (which has no .dark class yet) — this is expected, not a bug.
       suppressHydrationWarning
     >
       <head>
