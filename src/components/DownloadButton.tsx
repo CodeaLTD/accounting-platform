@@ -4,6 +4,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { MESSAGES } from "@/app/messages";
+import { Button } from "@/components/ui/button";
 import { intrastatWorkbookToUint8Array } from "@/core/exportXlsx";
 import type { IntrastatDeclarationLine } from "@/core/types";
 
@@ -58,13 +59,13 @@ export function DownloadButton({
   }
 
   return (
-    <button
+    <Button
       type="button"
       onClick={handleClick}
       disabled={lines.length === 0 || disabled}
-      className="self-start cursor-pointer rounded-md bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+      className="self-start bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
     >
       {MESSAGES.labels.downloadButton}
-    </button>
+    </Button>
   );
 }

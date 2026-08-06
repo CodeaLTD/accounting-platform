@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 import { MESSAGES } from "@/app/messages";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const ACCEPTED_EXTENSIONS = [".xls", ".xlsx"];
 
@@ -44,9 +46,12 @@ export function FileInput({
       {MESSAGES.labels.fileInput}
       <span className="flex items-center gap-2">
         <span
-          className={`rounded px-3 py-1 text-white ${
-            disabled ? "cursor-not-allowed bg-gray-400" : "cursor-pointer bg-blue-600"
-          }`}
+          className={cn(
+            buttonVariants({ variant: "default" }),
+            disabled
+              ? "cursor-not-allowed bg-gray-400 hover:bg-gray-400"
+              : "cursor-pointer bg-blue-600 text-white hover:bg-blue-700",
+          )}
         >
           {MESSAGES.labels.chooseFileButton}
         </span>
