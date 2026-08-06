@@ -9,8 +9,10 @@ const SET_INITIAL_THEME_SCRIPT = `
 (function () {
   try {
     var stored = localStorage.getItem("theme");
-    if (stored === "light" || stored === "dark") {
-      document.documentElement.dataset.theme = stored;
+    if (stored === "dark") {
+      document.documentElement.classList.add("dark");
+    } else if (stored === "light") {
+      document.documentElement.classList.remove("dark");
     }
   } catch (e) {}
 })();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 type Theme = "light" | "dark";
 
@@ -13,21 +14,21 @@ function systemTheme(): Theme {
 }
 
 function applyTheme(theme: Theme) {
-  document.documentElement.dataset.theme = theme;
+  document.documentElement.classList.toggle("dark", theme === "dark");
   localStorage.setItem(STORAGE_KEY, theme);
 }
 
 export function ThemeToggle() {
   // Starts null so the first client render matches the server-rendered HTML
-  // (which has no data-theme yet); the real value is read from the DOM right
-  // after mount, by which point the inline script in layout.tsx (or the
-  // system preference) has already set it.
+  // (which has no .dark class yet); the real value is read from the DOM
+  // right after mount, by which point the inline script in layout.tsx (or
+  // the system preference) has already set it.
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
-    const current =
-      (document.documentElement.dataset.theme as Theme | undefined) ??
-      systemTheme();
+    const current: Theme = document.documentElement.classList.contains("dark")
+      ? "dark"
+      : systemTheme();
     setTheme(current);
   }, []);
 
@@ -40,18 +41,15 @@ export function ThemeToggle() {
   if (theme === null) return null;
 
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="icon"
       onClick={toggle}
       aria-label="Смяна на светла/тъмна тема"
-      className="fixed top-4 right-4 z-50 cursor-pointer rounded-md border px-3 py-1 text-sm"
-      style={{
-        background: "var(--background)",
-        color: "var(--foreground)",
-        borderColor: "var(--foreground)",
-      }}
+      className="fixed top-4 right-4 z-50"
     >
       {theme === "dark" ? "☀️" : "🌙"}
-    </button>
+    </Button>
   );
 }
