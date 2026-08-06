@@ -6,6 +6,16 @@ import { MESSAGES } from "@/app/messages";
 import type { IntrastatDeclarationLine } from "@/core/types";
 import { DownloadButton } from "./DownloadButton";
 
+const { isTauriMock, saveMock, writeFileMock } = vi.hoisted(() => ({
+  isTauriMock: vi.fn(() => false),
+  saveMock: vi.fn(),
+  writeFileMock: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({ isTauri: isTauriMock }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ save: saveMock }));
+vi.mock("@tauri-apps/plugin-fs", () => ({ writeFile: writeFileMock }));
+
 function readBlobAsArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -38,6 +48,9 @@ describe("DownloadButton", () => {
 
   beforeEach(() => {
     capturedBlob = null;
+    isTauriMock.mockReturnValue(false);
+    saveMock.mockReset();
+    writeFileMock.mockReset();
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(
       () => {},
     );
@@ -69,6 +82,45 @@ describe("DownloadButton", () => {
       { header: 1, defval: "" },
     );
     expect(rows[1][1]).toBe("82084000");
+  });
+
+  it("opens a native save dialog and writes the file when running in Tauri", async () => {
+    isTauriMock.mockReturnValue(true);
+    saveMock.mockResolvedValue("C:\\Users\\test\\Documents\\my-export.xlsx");
+    writeFileMock.mockResolvedValue(undefined);
+
+    const user = userEvent.setup();
+    render(<DownloadButton lines={sampleLines} />);
+
+    await user.click(
+      screen.getByRole("button", { name: MESSAGES.labels.downloadButton }),
+    );
+
+    await waitFor(() => expect(writeFileMock).toHaveBeenCalledTimes(1));
+    expect(saveMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultPath: MESSAGES.files.downloadFileName,
+      }),
+    );
+    const [path, bytes] = writeFileMock.mock.calls[0];
+    expect(path).toBe("C:\\Users\\test\\Documents\\my-export.xlsx");
+    expect(bytes).toBeInstanceOf(Uint8Array);
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it("does not write a file when the save dialog is cancelled", async () => {
+    isTauriMock.mockReturnValue(true);
+    saveMock.mockResolvedValue(null);
+
+    const user = userEvent.setup();
+    render(<DownloadButton lines={sampleLines} />);
+
+    await user.click(
+      screen.getByRole("button", { name: MESSAGES.labels.downloadButton }),
+    );
+
+    await waitFor(() => expect(saveMock).toHaveBeenCalledTimes(1));
+    expect(writeFileMock).not.toHaveBeenCalled();
   });
 
   it("is disabled when there are no lines", () => {
