@@ -1594,7 +1594,7 @@ Expected: builds successfully (this also confirms `src/app/layout.tsx`'s new `Li
 
 - [ ] **Step 4: Manual desktop smoke test**
 
-Run: `npm run tauri dev`
+Run: `npx tauri dev` (there is no `tauri` npm script — `@tauri-apps/cli` is a devDependency, invoked directly)
 
 Expected, given the live API is currently returning `500`s on both endpoints (see plan context — a redeploy to Azure is in progress separately): the app should show the `LicenseLockedScreen` with a freshly generated device ID, **not** crash or hang — this is exactly the "server reachable but erroring" path exercised by `api.ts`'s fallback-to-`network_error`-on-unexpected-status handling (Task 5) and `evaluateLicenseCache`'s `no_network_no_cache` branch (Task 3, since a first-run device has nothing cached yet). Click the retry button to confirm it re-runs the check without restarting the app.
 
