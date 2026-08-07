@@ -8,6 +8,12 @@
   "permissions": [
     "core:default",
     "dialog:default",
-    "fs:allow-write-file"
+    "fs:allow-write-file",
+    "fs:allow-appdata-read",
+    "fs:allow-appdata-write",
+    {
+      "identifier": "http:default",
+      "allow": [{ "url": "https://codea-auth-server.onrender.com/*" }]
+    }
   ]
 }
