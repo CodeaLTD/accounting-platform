@@ -18,7 +18,7 @@ export async function registerDevice(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
     });
-  } catch (error) {
+  } catch {
     return { ok: false, reason: "network_error" };
   }
 
@@ -45,7 +45,7 @@ export async function verifyLicense(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(credentials),
     });
-  } catch (error) {
+  } catch {
     return { ok: false, reason: "network_error" };
   }
 

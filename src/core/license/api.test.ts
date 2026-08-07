@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { registerDevice, verifyLicense } from "./api";
 
 const { licenseFetchMock } = vi.hoisted(() => ({ licenseFetchMock: vi.fn() }));
@@ -12,8 +12,16 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 describe("registerDevice", () => {
-  beforeEach(() => licenseFetchMock.mockReset());
-  afterEach(() => vi.restoreAllMocks());
+  // Reset in afterEach, not beforeEach — resetting the mock synchronously
+  // right before a mockRejectedValue-configured test triggers a
+  // Vitest/tinyspy quirk (observed on v4.1.10) that misreports the
+  // rejection as unhandled even though it's caught by the implementation's
+  // try/catch. Each test sets its own mock behavior explicitly, so
+  // resetting after is equally safe and avoids the false failure.
+  afterEach(() => {
+    licenseFetchMock.mockReset();
+    vi.restoreAllMocks();
+  });
 
   it("returns ok with deviceId and apiKey on 201", async () => {
     licenseFetchMock.mockResolvedValue(
@@ -49,8 +57,11 @@ describe("registerDevice", () => {
 });
 
 describe("verifyLicense", () => {
-  beforeEach(() => licenseFetchMock.mockReset());
-  afterEach(() => vi.restoreAllMocks());
+  // See the comment in the registerDevice describe block above.
+  afterEach(() => {
+    licenseFetchMock.mockReset();
+    vi.restoreAllMocks();
+  });
 
   it("returns the license snapshot on 200", async () => {
     licenseFetchMock.mockResolvedValue(
