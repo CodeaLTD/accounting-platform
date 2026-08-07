@@ -40,9 +40,11 @@ export async function runLicenseCheck(): Promise<GateResult> {
         // value this can be. appVersion comes from Tauri's own runtime API
         // (the version declared in tauri.conf.json, the actual shipped
         // build) rather than the JS package.json version, which is a
-        // separate number that isn't guaranteed to match it.
+        // separate number that isn't guaranteed to match it. appVersion is
+        // optional and purely informational for support, so a failed IPC
+        // call here must never turn into a lockout — swallow it.
         platform: "desktop",
-        appVersion: await getVersion(),
+        appVersion: await getVersion().catch(() => undefined),
       });
       if (!registerResult.ok) {
         return { status: "blocked", deviceId, reason: "registration_failed" };

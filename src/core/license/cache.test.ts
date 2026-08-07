@@ -98,6 +98,27 @@ describe("evaluateLicenseCache", () => {
     });
   });
 
+  it("reports 'unpaid', not 'no_network_cache_expired', for a lapsed-and-unpaid cache with a past expiresAt", () => {
+    const liveResult: VerifyOutcome = { ok: false, reason: "network_error" };
+    const cached = cachedAt(1, {
+      isPaid: false,
+      expiresAt: new Date(NOW - ONE_HOUR_MS).toISOString(),
+    });
+    expect(evaluateLicenseCache({ liveResult, cached, now: NOW })).toEqual({
+      status: "blocked",
+      reason: "unpaid",
+    });
+  });
+
+  it("blocks with 'no_network_cache_expired' when a paid cache's expiresAt is unparseable", () => {
+    const liveResult: VerifyOutcome = { ok: false, reason: "network_error" };
+    const cached = cachedAt(1, { expiresAt: "not-a-date" });
+    expect(evaluateLicenseCache({ liveResult, cached, now: NOW })).toEqual({
+      status: "blocked",
+      reason: "no_network_cache_expired",
+    });
+  });
+
   it("blocks with 'no_network_cache_expired' when verifiedAt is in the future (clock skew)", () => {
     const liveResult: VerifyOutcome = { ok: false, reason: "network_error" };
     // verifiedAt 1 hour ahead of "now" — cacheAgeMs would be negative.

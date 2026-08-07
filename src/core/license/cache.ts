@@ -36,19 +36,27 @@ export function evaluateLicenseCache(params: {
     return { status: "blocked", reason: "no_network_cache_expired" };
   }
 
+  if (!cached.isPaid) {
+    return { status: "blocked", reason: "unpaid" };
+  }
+
   // cacheMaxAgeHours only says how long the server's answer can be trusted
   // offline — it doesn't mean the license itself hasn't since expired.
   // Check the license's own expiresAt too, independent of cache freshness.
-  if (cached.expiresAt !== null && new Date(cached.expiresAt).getTime() <= now) {
-    return { status: "blocked", reason: "no_network_cache_expired" };
+  // Only meaningful for a paid cache — an unpaid one already returned
+  // above, so this never mislabels a lapsed subscription as "offline".
+  // An unparseable expiresAt (NaN) fails closed rather than being trusted.
+  if (cached.expiresAt !== null) {
+    const expiresAtMs = new Date(cached.expiresAt).getTime();
+    if (Number.isNaN(expiresAtMs) || expiresAtMs <= now) {
+      return { status: "blocked", reason: "no_network_cache_expired" };
+    }
   }
 
-  return cached.isPaid
-    ? {
-        status: "allowed",
-        isPaid: true,
-        expiresAt: cached.expiresAt,
-        planType: cached.planType,
-      }
-    : { status: "blocked", reason: "unpaid" };
+  return {
+    status: "allowed",
+    isPaid: true,
+    expiresAt: cached.expiresAt,
+    planType: cached.planType,
+  };
 }
