@@ -19,9 +19,11 @@ export interface LicenseState {
    * A device ID generated locally but not yet confirmed by a successful
    * /api/device/register/ call — persisted immediately on generation so a
    * retry after a failed registration reuses the same ID instead of
-   * minting a new one every attempt (which would make the ID shown on the
-   * locked screen useless to support, since it'd change every retry).
-   * Cleared once real credentials are saved.
+   * minting a new one every attempt, which would otherwise orphan a device
+   * record on the server for every failed attempt and make the ID shown
+   * on the registration form's error state useless to support (it'd point
+   * at a different, never-retried record each time). Cleared once real
+   * credentials are saved.
    */
   pendingDeviceId: string | null;
 }

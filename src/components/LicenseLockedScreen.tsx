@@ -19,7 +19,6 @@ function messageFor(reason: LicenseBlockReason): string {
     case "no_network_cache_expired":
       return MESSAGES.license.offlineMessage;
     case "unpaid":
-    default:
       return MESSAGES.license.lockedMessage;
   }
 }

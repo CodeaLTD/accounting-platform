@@ -5,14 +5,19 @@ import { useCallback, useEffect, useState } from "react";
 import { MESSAGES } from "@/app/messages";
 import type { LicenseBlockReason } from "@/core/license/types";
 import { LicenseLockedScreen } from "./LicenseLockedScreen";
-import { runLicenseCheck, submitRegistration, type GateResult } from "./licenseCheck";
+import {
+  runLicenseCheck,
+  submitRegistration,
+  type GateResult,
+  type RegistrationFailureReason,
+} from "./licenseCheck";
 import { RegistrationForm } from "./RegistrationForm";
 
 type GateState =
   | { phase: "checking" }
   | { phase: "allowed" }
   | { phase: "needs_registration" }
-  | { phase: "registration_failed" }
+  | { phase: "registration_failed"; deviceId: string; reason: RegistrationFailureReason }
   | { phase: "blocked"; deviceId: string; reason: LicenseBlockReason };
 
 function toGateState(result: GateResult): GateState {
@@ -22,7 +27,7 @@ function toGateState(result: GateResult): GateState {
     case "needs_registration":
       return { phase: "needs_registration" };
     case "registration_failed":
-      return { phase: "registration_failed" };
+      return { phase: "registration_failed", deviceId: result.deviceId, reason: result.reason };
     case "blocked":
       return { phase: "blocked", deviceId: result.deviceId, reason: result.reason };
   }
@@ -42,6 +47,14 @@ export function LicenseGate({ children }: LicenseGateProps) {
   // client-side, after hydration. Always start in "checking" regardless of
   // environment; the effect decides what happens next.
   const [state, setState] = useState<GateState>({ phase: "checking" });
+
+  // Tracks an in-flight registration submission separately from `state`,
+  // since the registration form stays mounted (same phase) while it's
+  // pending — a phase change here would remount the form and lose the
+  // typed values. Used only to disable the submit button, so a slow or
+  // hanging request can't be double-submitted into two device
+  // registrations for the same machine.
+  const [registering, setRegistering] = useState(false);
 
   // Runs the async check and applies its result — no synchronous setState
   // here, so this is safe to call directly from the mount effect below.
@@ -67,9 +80,13 @@ export function LicenseGate({ children }: LicenseGateProps) {
   // generic locked screen, since re-entering the details is directly
   // actionable by the user here.
   const register = useCallback((params: { email: string; username: string }) => {
+    setRegistering(true);
     submitRegistration(params)
       .then((result) => setState(toGateState(result)))
-      .catch(() => setState({ phase: "registration_failed" }));
+      .catch(() =>
+        setState({ phase: "registration_failed", deviceId: "", reason: "network_error" }),
+      )
+      .finally(() => setRegistering(false));
   }, []);
 
   useEffect(() => {
@@ -89,10 +106,16 @@ export function LicenseGate({ children }: LicenseGateProps) {
     return <p className="p-8">{MESSAGES.license.checkingMessage}</p>;
   }
   if (state.phase === "needs_registration") {
-    return <RegistrationForm onSubmit={register} />;
+    return <RegistrationForm onSubmit={register} pending={registering} />;
   }
   if (state.phase === "registration_failed") {
-    return <RegistrationForm onSubmit={register} error />;
+    return (
+      <RegistrationForm
+        onSubmit={register}
+        pending={registering}
+        error={{ deviceId: state.deviceId, reason: state.reason }}
+      />
+    );
   }
   if (state.phase === "blocked") {
     return <LicenseLockedScreen deviceId={state.deviceId} reason={state.reason} onRetry={retry} />;

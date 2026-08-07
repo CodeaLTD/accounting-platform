@@ -191,7 +191,11 @@ describe("LicenseGate", () => {
   it("re-shows the registration form with an error when submission fails", async () => {
     const user = userEvent.setup();
     runLicenseCheckMock.mockResolvedValue({ status: "needs_registration" });
-    submitRegistrationMock.mockResolvedValue({ status: "registration_failed" });
+    submitRegistrationMock.mockResolvedValue({
+      status: "registration_failed",
+      deviceId: "A1B2-C3D4",
+      reason: "network_error",
+    });
 
     render(
       <LicenseGate>
@@ -228,7 +232,11 @@ describe("LicenseGate", () => {
     const user = userEvent.setup();
     runLicenseCheckMock.mockResolvedValue({ status: "needs_registration" });
     submitRegistrationMock
-      .mockResolvedValueOnce({ status: "registration_failed" })
+      .mockResolvedValueOnce({
+        status: "registration_failed",
+        deviceId: "A1B2-C3D4",
+        reason: "network_error",
+      })
       .mockResolvedValueOnce({ status: "allowed" });
 
     render(
@@ -267,5 +275,56 @@ describe("LicenseGate", () => {
       expect(screen.getByText("App content")).toBeInTheDocument();
     });
     expect(submitRegistrationMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("disables the submit button while a registration is in flight, preventing a double-submit", async () => {
+    const user = userEvent.setup();
+    runLicenseCheckMock.mockResolvedValue({ status: "needs_registration" });
+    let resolveSubmit: (value: { status: "allowed" }) => void;
+    submitRegistrationMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSubmit = resolve;
+      }),
+    );
+
+    render(
+      <LicenseGate>
+        <p>App content</p>
+      </LicenseGate>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(MESSAGES.registration.title)).toBeInTheDocument();
+    });
+
+    await user.type(
+      screen.getByLabelText(MESSAGES.registration.emailLabel),
+      "accountant@example.com",
+    );
+    await user.type(
+      screen.getByLabelText(MESSAGES.registration.usernameLabel),
+      "accountant",
+    );
+
+    const submitButton = screen.getByRole("button", {
+      name: MESSAGES.registration.submitButton,
+    });
+    await user.click(submitButton);
+    expect(submitRegistrationMock).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => {
+      expect(submitButton).toBeDisabled();
+    });
+    // A second click while the first attempt is still in flight (the mock
+    // hasn't resolved yet) must not fire a second registration — this is
+    // exactly the double-registration-on-the-server scenario the pending
+    // guard exists to prevent.
+    await user.click(submitButton);
+    expect(submitRegistrationMock).toHaveBeenCalledTimes(1);
+
+    resolveSubmit!({ status: "allowed" });
+    await waitFor(() => {
+      expect(screen.getByText("App content")).toBeInTheDocument();
+    });
   });
 });

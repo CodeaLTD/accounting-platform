@@ -197,7 +197,7 @@ describe("submitRegistration", () => {
     expect(result).toEqual({ status: "allowed" });
   });
 
-  it("returns 'registration_failed' when registration fails, without calling verify", async () => {
+  it("returns 'registration_failed' with the device id and reason, without calling verify", async () => {
     loadLicenseStateMock.mockResolvedValue({
       credentials: null,
       cached: null,
@@ -208,7 +208,28 @@ describe("submitRegistration", () => {
     const result = await submitRegistration(registrationParams);
 
     expect(verifyLicenseMock).not.toHaveBeenCalled();
-    expect(result).toEqual({ status: "registration_failed" });
+    expect(result).toEqual({
+      status: "registration_failed",
+      deviceId: "new-device-id",
+      reason: "network_error",
+    });
+  });
+
+  it("passes through a 'conflict' reason distinctly from other failures", async () => {
+    loadLicenseStateMock.mockResolvedValue({
+      credentials: null,
+      cached: null,
+      pendingDeviceId: null,
+    });
+    registerDeviceMock.mockResolvedValue({ ok: false, reason: "conflict" });
+
+    const result = await submitRegistration(registrationParams);
+
+    expect(result).toEqual({
+      status: "registration_failed",
+      deviceId: "new-device-id",
+      reason: "conflict",
+    });
   });
 
   it("reuses a previously-persisted pending device ID instead of generating a new one", async () => {
@@ -225,7 +246,11 @@ describe("submitRegistration", () => {
       expect.objectContaining({ deviceId: "already-pending-id" }),
     );
     expect(savePendingDeviceIdMock).not.toHaveBeenCalled();
-    expect(result).toEqual({ status: "registration_failed" });
+    expect(result).toEqual({
+      status: "registration_failed",
+      deviceId: "already-pending-id",
+      reason: "network_error",
+    });
   });
 
   it("persists a newly-generated device ID before attempting registration", async () => {
@@ -241,11 +266,13 @@ describe("submitRegistration", () => {
     expect(savePendingDeviceIdMock).toHaveBeenCalledWith("new-device-id");
   });
 
-  it("returns 'registration_failed' instead of rejecting when loadLicenseState itself throws", async () => {
+  it("returns 'registration_failed' with an empty device id instead of rejecting when loadLicenseState itself throws", async () => {
     loadLicenseStateMock.mockRejectedValue(new Error("disk error"));
 
     await expect(submitRegistration(registrationParams)).resolves.toEqual({
       status: "registration_failed",
+      deviceId: "",
+      reason: "network_error",
     });
   });
 });

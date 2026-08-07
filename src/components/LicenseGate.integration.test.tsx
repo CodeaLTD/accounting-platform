@@ -187,5 +187,10 @@ describe("LicenseGate integration (real licenseCheck/api/cache/platform)", () =>
       (retryRegisterCall[1] as RequestInit).body as string,
     );
     expect(retryRegisterBody.deviceId).toBe(deviceIdFromFirstAttempt);
+    // The typed email is proven to survive the needs_registration ->
+    // registration_failed transition (same form instance, not remounted)
+    // by checking it here too, not just the device ID.
+    expect(retryRegisterBody.email).toBe("accountant@example.com");
+    expect(retryRegisterBody.username).toBe("accountant");
   });
 });

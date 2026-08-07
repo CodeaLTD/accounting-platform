@@ -9,11 +9,13 @@ import {
   savePendingDeviceId,
 } from "@/platform/license";
 
+export type RegistrationFailureReason = "conflict" | "invalid_request" | "network_error";
+
 export type GateResult =
   | { status: "allowed" }
   | { status: "blocked"; deviceId: string; reason: LicenseBlockReason }
   | { status: "needs_registration" }
-  | { status: "registration_failed" };
+  | { status: "registration_failed"; deviceId: string; reason: RegistrationFailureReason };
 
 export interface RegistrationParams {
   email: string;
@@ -72,13 +74,16 @@ export async function runLicenseCheck(): Promise<GateResult> {
 }
 
 export async function submitRegistration(params: RegistrationParams): Promise<GateResult> {
+  // Declared outside the try so the catch-all below can still report which
+  // device ID this attempt was for, if we got far enough to generate one.
+  let deviceId = "";
   try {
     const stored = await loadLicenseState();
 
     // Reuse a previously-generated-but-not-yet-registered device ID so a
     // retry after a failed registration presents the same ID on future
     // attempts, instead of a fresh one every time.
-    const deviceId = stored.pendingDeviceId ?? crypto.randomUUID();
+    deviceId = stored.pendingDeviceId ?? crypto.randomUUID();
     if (!stored.pendingDeviceId) {
       try {
         await savePendingDeviceId(deviceId);
@@ -105,7 +110,7 @@ export async function submitRegistration(params: RegistrationParams): Promise<Ga
       appVersion: await getVersion().catch(() => undefined),
     });
     if (!registerResult.ok) {
-      return { status: "registration_failed" };
+      return { status: "registration_failed", deviceId, reason: registerResult.reason };
     }
 
     const credentials: DeviceCredentials = {
@@ -121,6 +126,6 @@ export async function submitRegistration(params: RegistrationParams): Promise<Ga
 
     return await verifyAndDecide(credentials, stored.cached);
   } catch {
-    return { status: "registration_failed" };
+    return { status: "registration_failed", deviceId, reason: "network_error" };
   }
 }
