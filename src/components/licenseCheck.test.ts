@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CachedLicense, DeviceCredentials } from "@/core/license/types";
-import { runLicenseCheck } from "./licenseCheck";
+import { runLicenseCheck, submitRegistration } from "./licenseCheck";
 
 const {
   getVersionMock,
@@ -44,73 +44,36 @@ const cached: CachedLicense = {
   cacheMaxAgeHours: 24,
 };
 
+beforeEach(() => {
+  getVersionMock.mockResolvedValue("0.1.0");
+  registerDeviceMock.mockReset();
+  verifyLicenseMock.mockReset();
+  loadLicenseStateMock.mockReset();
+  saveCredentialsMock.mockReset();
+  saveCachedLicenseMock.mockReset();
+  savePendingDeviceIdMock.mockReset();
+  vi.stubGlobal("crypto", { randomUUID: () => "new-device-id" });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
 describe("runLicenseCheck", () => {
-  beforeEach(() => {
-    getVersionMock.mockResolvedValue("0.1.0");
-    registerDeviceMock.mockReset();
-    verifyLicenseMock.mockReset();
-    loadLicenseStateMock.mockReset();
-    saveCredentialsMock.mockReset();
-    saveCachedLicenseMock.mockReset();
-    savePendingDeviceIdMock.mockReset();
-    vi.stubGlobal("crypto", { randomUUID: () => "new-device-id" });
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-    vi.useRealTimers();
-  });
-
-  it("registers a new device when no credentials are stored, then verifies", async () => {
+  it("returns 'needs_registration' when no credentials are stored, without calling the API at all", async () => {
     loadLicenseStateMock.mockResolvedValue({
       credentials: null,
       cached: null,
       pendingDeviceId: null,
     });
-    registerDeviceMock.mockResolvedValue({
-      ok: true,
-      deviceId: "new-device-id",
-      apiKey: "cda_new",
-    });
-    verifyLicenseMock.mockResolvedValue({
-      ok: true,
-      isPaid: true,
-      expiresAt: "2099-01-01T00:00:00Z",
-      planType: "yearly",
-      cacheMaxAgeHours: 24,
-    });
 
     const result = await runLicenseCheck();
 
-    expect(registerDeviceMock).toHaveBeenCalledWith({
-      deviceId: "new-device-id",
-      platform: "desktop",
-      appVersion: "0.1.0",
-    });
-    expect(saveCredentialsMock).toHaveBeenCalledWith({
-      deviceId: "new-device-id",
-      apiKey: "cda_new",
-    });
-    expect(result).toEqual({ status: "allowed" });
-  });
-
-  it("blocks with 'registration_failed' when registration fails", async () => {
-    loadLicenseStateMock.mockResolvedValue({
-      credentials: null,
-      cached: null,
-      pendingDeviceId: null,
-    });
-    registerDeviceMock.mockResolvedValue({ ok: false, reason: "network_error" });
-
-    const result = await runLicenseCheck();
-
+    expect(registerDeviceMock).not.toHaveBeenCalled();
     expect(verifyLicenseMock).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      status: "blocked",
-      deviceId: "new-device-id",
-      reason: "registration_failed",
-    });
+    expect(result).toEqual({ status: "needs_registration" });
   });
 
   it("skips registration and verifies directly when credentials are already stored", async () => {
@@ -185,6 +148,69 @@ describe("runLicenseCheck", () => {
     });
   });
 
+  it("returns a blocked result instead of rejecting when loadLicenseState itself throws", async () => {
+    loadLicenseStateMock.mockRejectedValue(new Error("disk error"));
+
+    await expect(runLicenseCheck()).resolves.toEqual({
+      status: "blocked",
+      deviceId: "",
+      reason: "no_network_no_cache",
+    });
+  });
+});
+
+describe("submitRegistration", () => {
+  const registrationParams = { email: "accountant@example.com", username: "accountant" };
+
+  it("registers with the given email/username, saves credentials, then verifies", async () => {
+    loadLicenseStateMock.mockResolvedValue({
+      credentials: null,
+      cached: null,
+      pendingDeviceId: null,
+    });
+    registerDeviceMock.mockResolvedValue({
+      ok: true,
+      deviceId: "new-device-id",
+      apiKey: "cda_new",
+    });
+    verifyLicenseMock.mockResolvedValue({
+      ok: true,
+      isPaid: true,
+      expiresAt: "2099-01-01T00:00:00Z",
+      planType: "yearly",
+      cacheMaxAgeHours: 24,
+    });
+
+    const result = await submitRegistration(registrationParams);
+
+    expect(registerDeviceMock).toHaveBeenCalledWith({
+      deviceId: "new-device-id",
+      email: "accountant@example.com",
+      username: "accountant",
+      platform: "desktop",
+      appVersion: "0.1.0",
+    });
+    expect(saveCredentialsMock).toHaveBeenCalledWith({
+      deviceId: "new-device-id",
+      apiKey: "cda_new",
+    });
+    expect(result).toEqual({ status: "allowed" });
+  });
+
+  it("returns 'registration_failed' when registration fails, without calling verify", async () => {
+    loadLicenseStateMock.mockResolvedValue({
+      credentials: null,
+      cached: null,
+      pendingDeviceId: null,
+    });
+    registerDeviceMock.mockResolvedValue({ ok: false, reason: "network_error" });
+
+    const result = await submitRegistration(registrationParams);
+
+    expect(verifyLicenseMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ status: "registration_failed" });
+  });
+
   it("reuses a previously-persisted pending device ID instead of generating a new one", async () => {
     loadLicenseStateMock.mockResolvedValue({
       credentials: null,
@@ -193,17 +219,13 @@ describe("runLicenseCheck", () => {
     });
     registerDeviceMock.mockResolvedValue({ ok: false, reason: "network_error" });
 
-    const result = await runLicenseCheck();
+    const result = await submitRegistration(registrationParams);
 
     expect(registerDeviceMock).toHaveBeenCalledWith(
       expect.objectContaining({ deviceId: "already-pending-id" }),
     );
     expect(savePendingDeviceIdMock).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      status: "blocked",
-      deviceId: "already-pending-id",
-      reason: "registration_failed",
-    });
+    expect(result).toEqual({ status: "registration_failed" });
   });
 
   it("persists a newly-generated device ID before attempting registration", async () => {
@@ -214,18 +236,16 @@ describe("runLicenseCheck", () => {
     });
     registerDeviceMock.mockResolvedValue({ ok: false, reason: "network_error" });
 
-    await runLicenseCheck();
+    await submitRegistration(registrationParams);
 
     expect(savePendingDeviceIdMock).toHaveBeenCalledWith("new-device-id");
   });
 
-  it("returns a blocked result instead of rejecting when loadLicenseState itself throws", async () => {
+  it("returns 'registration_failed' instead of rejecting when loadLicenseState itself throws", async () => {
     loadLicenseStateMock.mockRejectedValue(new Error("disk error"));
 
-    await expect(runLicenseCheck()).resolves.toEqual({
-      status: "blocked",
-      deviceId: "",
-      reason: "no_network_no_cache",
+    await expect(submitRegistration(registrationParams)).resolves.toEqual({
+      status: "registration_failed",
     });
   });
 });

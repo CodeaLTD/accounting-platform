@@ -24,18 +24,13 @@ export type VerifyOutcome =
   | ({ ok: true; cacheMaxAgeHours: number } & LicenseSnapshot)
   | { ok: false; reason: "invalid_credentials" | "revoked" | "network_error" };
 
-// "registration_failed" is only ever produced directly by
-// src/components/licenseCheck.ts (Task 8) when device registration itself
-// fails — evaluateLicenseCache (Task 3) never returns it, since it only
-// ever sees an already-registered device's verify outcome.
 export type LicenseBlockReason =
   | "unpaid"
   | "invalid_credentials"
   | "revoked"
   | "no_network_no_cache"
-  | "no_network_cache_expired"
-  | "registration_failed";
+  | "no_network_cache_expired";
 
 export type LicenseDecision =
   | ({ status: "allowed" } & LicenseSnapshot)
-  | { status: "blocked"; reason: Exclude<LicenseBlockReason, "registration_failed"> };
+  | { status: "blocked"; reason: LicenseBlockReason };

@@ -18,8 +18,6 @@ function messageFor(reason: LicenseBlockReason): string {
     case "no_network_no_cache":
     case "no_network_cache_expired":
       return MESSAGES.license.offlineMessage;
-    case "registration_failed":
-      return MESSAGES.license.registrationFailedMessage;
     case "unpaid":
     default:
       return MESSAGES.license.lockedMessage;

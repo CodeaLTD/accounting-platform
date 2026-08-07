@@ -86,15 +86,21 @@ describe("LicenseGate integration (real licenseCheck/api/cache/platform)", () =>
     vi.restoreAllMocks();
   });
 
-  it("shows the locked screen when the server errors, then unlocks after a successful retry", async () => {
-    const user = userEvent.setup();
-
-    // First attempt: registration hits the server's current real-world 500
-    // (matches what codea-auth-server was actually returning at the time
-    // this feature was built).
-    tauriFetchMock.mockResolvedValueOnce(
-      jsonResponse(500, { error: "Registration failed", code: "server_error" }),
+  it("shows the registration form on first launch, without calling the API until submitted", async () => {
+    render(
+      <LicenseGate>
+        <p>App content</p>
+      </LicenseGate>,
     );
+
+    await waitFor(() => {
+      expect(screen.getByText(MESSAGES.registration.title)).toBeInTheDocument();
+    });
+    expect(tauriFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("registers via the form, retries after a server error using the same device id, then unlocks", async () => {
+    const user = userEvent.setup();
 
     render(
       <LicenseGate>
@@ -103,20 +109,53 @@ describe("LicenseGate integration (real licenseCheck/api/cache/platform)", () =>
     );
 
     await waitFor(() => {
+      expect(screen.getByText(MESSAGES.registration.title)).toBeInTheDocument();
+    });
+
+    await user.type(
+      screen.getByLabelText(MESSAGES.registration.emailLabel),
+      "accountant@example.com",
+    );
+    await user.type(
+      screen.getByLabelText(MESSAGES.registration.usernameLabel),
+      "accountant",
+    );
+
+    // First attempt: registration hits the server's current real-world 500
+    // (matches what codea-auth-server was actually returning at the time
+    // this feature was built).
+    tauriFetchMock.mockResolvedValueOnce(
+      jsonResponse(500, { error: "Registration failed", code: "server_error" }),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: MESSAGES.registration.submitButton }),
+    );
+
+    await waitFor(() => {
       expect(
-        screen.getByText(MESSAGES.license.registrationFailedMessage),
+        screen.getByText(MESSAGES.registration.errorMessage),
       ).toBeInTheDocument();
     });
-    const deviceIdOnLockedScreen = screen.getByLabelText(
-      MESSAGES.license.deviceIdLabel,
-    ).textContent;
-    expect(deviceIdOnLockedScreen).toBeTruthy();
+    // Still the registration form, not the generic locked screen — the
+    // user can just fix things and resubmit.
+    expect(screen.getByText(MESSAGES.registration.title)).toBeInTheDocument();
 
-    // Second attempt (retry): registration succeeds, verify reports paid.
+    const firstRegisterCall = tauriFetchMock.mock.calls[0];
+    const firstRegisterBody = JSON.parse(
+      (firstRegisterCall[1] as RequestInit).body as string,
+    );
+    expect(firstRegisterBody.email).toBe("accountant@example.com");
+    expect(firstRegisterBody.username).toBe("accountant");
+    const deviceIdFromFirstAttempt = firstRegisterBody.deviceId;
+    expect(deviceIdFromFirstAttempt).toBeTruthy();
+
+    // Retry (same form instance — the entered email/username are still
+    // filled in): registration succeeds this time, verify reports paid.
     tauriFetchMock
       .mockResolvedValueOnce(
         jsonResponse(201, {
-          deviceId: deviceIdOnLockedScreen,
+          deviceId: deviceIdFromFirstAttempt,
           apiKey: "cda_test",
           isPaid: false,
         }),
@@ -132,7 +171,7 @@ describe("LicenseGate integration (real licenseCheck/api/cache/platform)", () =>
       );
 
     await user.click(
-      screen.getByRole("button", { name: MESSAGES.license.retryButton }),
+      screen.getByRole("button", { name: MESSAGES.registration.submitButton }),
     );
 
     await waitFor(() => {
@@ -140,13 +179,13 @@ describe("LicenseGate integration (real licenseCheck/api/cache/platform)", () =>
     });
 
     // The device ID sent on the successful retry's registration call must
-    // match the one shown on the locked screen — proving the pending
-    // device ID actually round-tripped through the real platform layer
-    // instead of a fresh one being generated on retry.
+    // match the one from the first (failed) attempt — proving the pending
+    // device ID actually round-trips through the real platform layer
+    // instead of a fresh one being generated on each attempt.
     const retryRegisterCall = tauriFetchMock.mock.calls[1];
     const retryRegisterBody = JSON.parse(
       (retryRegisterCall[1] as RequestInit).body as string,
     );
-    expect(retryRegisterBody.deviceId).toBe(deviceIdOnLockedScreen);
+    expect(retryRegisterBody.deviceId).toBe(deviceIdFromFirstAttempt);
   });
 });

@@ -5,12 +5,28 @@ import { useCallback, useEffect, useState } from "react";
 import { MESSAGES } from "@/app/messages";
 import type { LicenseBlockReason } from "@/core/license/types";
 import { LicenseLockedScreen } from "./LicenseLockedScreen";
-import { runLicenseCheck } from "./licenseCheck";
+import { runLicenseCheck, submitRegistration, type GateResult } from "./licenseCheck";
+import { RegistrationForm } from "./RegistrationForm";
 
 type GateState =
   | { phase: "checking" }
   | { phase: "allowed" }
+  | { phase: "needs_registration" }
+  | { phase: "registration_failed" }
   | { phase: "blocked"; deviceId: string; reason: LicenseBlockReason };
+
+function toGateState(result: GateResult): GateState {
+  switch (result.status) {
+    case "allowed":
+      return { phase: "allowed" };
+    case "needs_registration":
+      return { phase: "needs_registration" };
+    case "registration_failed":
+      return { phase: "registration_failed" };
+    case "blocked":
+      return { phase: "blocked", deviceId: result.deviceId, reason: result.reason };
+  }
+}
 
 interface LicenseGateProps {
   children: React.ReactNode;
@@ -31,13 +47,7 @@ export function LicenseGate({ children }: LicenseGateProps) {
   // here, so this is safe to call directly from the mount effect below.
   const runCheck = useCallback(() => {
     runLicenseCheck()
-      .then((result) => {
-        setState(
-          result.status === "allowed"
-            ? { phase: "allowed" }
-            : { phase: "blocked", deviceId: result.deviceId, reason: result.reason },
-        );
-      })
+      .then((result) => setState(toGateState(result)))
       .catch(() => {
         setState({ phase: "blocked", deviceId: "", reason: "no_network_no_cache" });
       });
@@ -50,6 +60,17 @@ export function LicenseGate({ children }: LicenseGateProps) {
     setState({ phase: "checking" });
     runCheck();
   }, [runCheck]);
+
+  // Submitting the registration form — success moves straight to
+  // allowed/blocked via the same verify flow runCheck uses; failure stays
+  // on the form (re-rendered with an error) rather than dropping to the
+  // generic locked screen, since re-entering the details is directly
+  // actionable by the user here.
+  const register = useCallback((params: { email: string; username: string }) => {
+    submitRegistration(params)
+      .then((result) => setState(toGateState(result)))
+      .catch(() => setState({ phase: "registration_failed" }));
+  }, []);
 
   useEffect(() => {
     // License enforcement is a desktop-only concern (see
@@ -66,6 +87,12 @@ export function LicenseGate({ children }: LicenseGateProps) {
 
   if (state.phase === "checking") {
     return <p className="p-8">{MESSAGES.license.checkingMessage}</p>;
+  }
+  if (state.phase === "needs_registration") {
+    return <RegistrationForm onSubmit={register} />;
+  }
+  if (state.phase === "registration_failed") {
+    return <RegistrationForm onSubmit={register} error />;
   }
   if (state.phase === "blocked") {
     return <LicenseLockedScreen deviceId={state.deviceId} reason={state.reason} onRetry={retry} />;

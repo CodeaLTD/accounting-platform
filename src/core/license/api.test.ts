@@ -31,6 +31,23 @@ describe("registerDevice", () => {
     expect(result).toEqual({ ok: true, deviceId: "A1B2", apiKey: "cda_xxx" });
   });
 
+  it("sends email and username in the request body when provided", async () => {
+    licenseFetchMock.mockResolvedValue(
+      jsonResponse(201, { deviceId: "A1B2", apiKey: "cda_xxx", isPaid: false }),
+    );
+    await registerDevice({
+      deviceId: "A1B2",
+      email: "accountant@example.com",
+      username: "accountant",
+    });
+    const [, init] = licenseFetchMock.mock.calls[0];
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      deviceId: "A1B2",
+      email: "accountant@example.com",
+      username: "accountant",
+    });
+  });
+
   it("returns 'conflict' on 409", async () => {
     licenseFetchMock.mockResolvedValue(jsonResponse(409, { error: "x" }));
     const result = await registerDevice({ deviceId: "A1B2" });

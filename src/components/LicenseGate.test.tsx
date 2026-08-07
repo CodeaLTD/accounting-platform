@@ -4,18 +4,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MESSAGES } from "@/app/messages";
 import { LicenseGate } from "./LicenseGate";
 
-const { isTauriMock, runLicenseCheckMock } = vi.hoisted(() => ({
+const { isTauriMock, runLicenseCheckMock, submitRegistrationMock } = vi.hoisted(() => ({
   isTauriMock: vi.fn(() => true),
   runLicenseCheckMock: vi.fn(),
+  submitRegistrationMock: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: isTauriMock }));
-vi.mock("./licenseCheck", () => ({ runLicenseCheck: runLicenseCheckMock }));
+vi.mock("./licenseCheck", () => ({
+  runLicenseCheck: runLicenseCheckMock,
+  submitRegistration: submitRegistrationMock,
+}));
 
 describe("LicenseGate", () => {
   beforeEach(() => {
     isTauriMock.mockReturnValue(true);
     runLicenseCheckMock.mockReset();
+    submitRegistrationMock.mockReset();
   });
 
   afterEach(() => {
@@ -128,5 +133,139 @@ describe("LicenseGate", () => {
       expect(screen.getByText("App content")).toBeInTheDocument();
     });
     expect(runLicenseCheckMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the registration form when no device is registered yet", async () => {
+    runLicenseCheckMock.mockResolvedValue({ status: "needs_registration" });
+
+    render(
+      <LicenseGate>
+        <p>App content</p>
+      </LicenseGate>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(MESSAGES.registration.title)).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText(MESSAGES.registration.errorMessage),
+    ).not.toBeInTheDocument();
+  });
+
+  it("submits the registration form, then renders children once allowed", async () => {
+    const user = userEvent.setup();
+    runLicenseCheckMock.mockResolvedValue({ status: "needs_registration" });
+    submitRegistrationMock.mockResolvedValue({ status: "allowed" });
+
+    render(
+      <LicenseGate>
+        <p>App content</p>
+      </LicenseGate>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(MESSAGES.registration.title)).toBeInTheDocument();
+    });
+
+    await user.type(
+      screen.getByLabelText(MESSAGES.registration.emailLabel),
+      "accountant@example.com",
+    );
+    await user.type(
+      screen.getByLabelText(MESSAGES.registration.usernameLabel),
+      "accountant",
+    );
+    await user.click(
+      screen.getByRole("button", { name: MESSAGES.registration.submitButton }),
+    );
+
+    expect(submitRegistrationMock).toHaveBeenCalledWith({
+      email: "accountant@example.com",
+      username: "accountant",
+    });
+    await waitFor(() => {
+      expect(screen.getByText("App content")).toBeInTheDocument();
+    });
+  });
+
+  it("re-shows the registration form with an error when submission fails", async () => {
+    const user = userEvent.setup();
+    runLicenseCheckMock.mockResolvedValue({ status: "needs_registration" });
+    submitRegistrationMock.mockResolvedValue({ status: "registration_failed" });
+
+    render(
+      <LicenseGate>
+        <p>App content</p>
+      </LicenseGate>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(MESSAGES.registration.title)).toBeInTheDocument();
+    });
+
+    await user.type(
+      screen.getByLabelText(MESSAGES.registration.emailLabel),
+      "accountant@example.com",
+    );
+    await user.type(
+      screen.getByLabelText(MESSAGES.registration.usernameLabel),
+      "accountant",
+    );
+    await user.click(
+      screen.getByRole("button", { name: MESSAGES.registration.submitButton }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(MESSAGES.registration.errorMessage),
+      ).toBeInTheDocument();
+    });
+    // Still the registration form, not the generic locked screen.
+    expect(screen.getByText(MESSAGES.registration.title)).toBeInTheDocument();
+  });
+
+  it("submitting again from the error state re-registers and can succeed", async () => {
+    const user = userEvent.setup();
+    runLicenseCheckMock.mockResolvedValue({ status: "needs_registration" });
+    submitRegistrationMock
+      .mockResolvedValueOnce({ status: "registration_failed" })
+      .mockResolvedValueOnce({ status: "allowed" });
+
+    render(
+      <LicenseGate>
+        <p>App content</p>
+      </LicenseGate>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(MESSAGES.registration.title)).toBeInTheDocument();
+    });
+
+    await user.type(
+      screen.getByLabelText(MESSAGES.registration.emailLabel),
+      "accountant@example.com",
+    );
+    await user.type(
+      screen.getByLabelText(MESSAGES.registration.usernameLabel),
+      "accountant",
+    );
+    await user.click(
+      screen.getByRole("button", { name: MESSAGES.registration.submitButton }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(MESSAGES.registration.errorMessage),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: MESSAGES.registration.submitButton }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("App content")).toBeInTheDocument();
+    });
+    expect(submitRegistrationMock).toHaveBeenCalledTimes(2);
   });
 });

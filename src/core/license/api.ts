@@ -6,6 +6,8 @@ export interface RegisterDeviceParams {
   deviceId: string;
   platform?: string;
   appVersion?: string;
+  email?: string;
+  username?: string;
 }
 
 export async function registerDevice(

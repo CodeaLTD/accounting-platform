@@ -1,7 +1,7 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { registerDevice, verifyLicense } from "@/core/license/api";
 import { evaluateLicenseCache } from "@/core/license/cache";
-import type { DeviceCredentials, LicenseBlockReason } from "@/core/license/types";
+import type { CachedLicense, DeviceCredentials, LicenseBlockReason } from "@/core/license/types";
 import {
   loadLicenseState,
   saveCachedLicense,
@@ -11,83 +11,116 @@ import {
 
 export type GateResult =
   | { status: "allowed" }
-  | { status: "blocked"; deviceId: string; reason: LicenseBlockReason };
+  | { status: "blocked"; deviceId: string; reason: LicenseBlockReason }
+  | { status: "needs_registration" }
+  | { status: "registration_failed" };
+
+export interface RegistrationParams {
+  email: string;
+  username: string;
+}
+
+// Shared by runLicenseCheck (already-registered device) and
+// submitRegistration (right after a successful registration) — verifies
+// against the live API, persists a fresh cache entry on success, and falls
+// back to the offline trust-window logic otherwise.
+async function verifyAndDecide(
+  credentials: DeviceCredentials,
+  cached: CachedLicense | null,
+): Promise<GateResult> {
+  const liveResult = await verifyLicense(credentials);
+  if (liveResult.ok) {
+    try {
+      await saveCachedLicense({
+        isPaid: liveResult.isPaid,
+        expiresAt: liveResult.expiresAt,
+        planType: liveResult.planType,
+        verifiedAt: Date.now(),
+        cacheMaxAgeHours: liveResult.cacheMaxAgeHours,
+      });
+    } catch {
+      // Persisting failed — still usable this session.
+    }
+  }
+
+  const decision = evaluateLicenseCache({
+    liveResult,
+    cached,
+    now: Date.now(),
+  });
+
+  if (decision.status === "allowed") return { status: "allowed" };
+  return { status: "blocked", deviceId: credentials.deviceId, reason: decision.reason };
+}
 
 export async function runLicenseCheck(): Promise<GateResult> {
   try {
     const stored = await loadLicenseState();
-    let credentials: DeviceCredentials | null = stored.credentials;
-
-    if (!credentials) {
-      // Reuse a previously-generated-but-not-yet-registered device ID so a
-      // retry after a failed registration presents the same ID to support,
-      // instead of a fresh one on every attempt.
-      const deviceId = stored.pendingDeviceId ?? crypto.randomUUID();
-      if (!stored.pendingDeviceId) {
-        try {
-          await savePendingDeviceId(deviceId);
-        } catch {
-          // Persisting the pending ID failed — still usable for this
-          // attempt, just won't survive a restart before registration
-          // succeeds.
-        }
-      }
-
-      const registerResult = await registerDevice({
-        deviceId,
-        // runLicenseCheck only ever runs inside Tauri (see LicenseGate's
-        // isTauri() guard before it's ever called) — "desktop" is the only
-        // value this can be. appVersion comes from Tauri's own runtime API
-        // (the version declared in tauri.conf.json, the actual shipped
-        // build) rather than the JS package.json version, which is a
-        // separate number that isn't guaranteed to match it. appVersion is
-        // optional and purely informational for support, so a failed IPC
-        // call here must never turn into a lockout — swallow it.
-        platform: "desktop",
-        appVersion: await getVersion().catch(() => undefined),
-      });
-      if (!registerResult.ok) {
-        return { status: "blocked", deviceId, reason: "registration_failed" };
-      }
-      credentials = {
-        deviceId: registerResult.deviceId,
-        apiKey: registerResult.apiKey,
-      };
-      try {
-        await saveCredentials(credentials);
-      } catch {
-        // Persisting failed — still usable this session; next launch will
-        // just register a new device.
-      }
+    if (!stored.credentials) {
+      // No device on file yet — hand off to the registration form instead
+      // of silently generating an ID and registering behind the user's
+      // back. Nothing gets sent to the server until they submit it.
+      return { status: "needs_registration" };
     }
-
-    const liveResult = await verifyLicense(credentials);
-    if (liveResult.ok) {
-      try {
-        await saveCachedLicense({
-          isPaid: liveResult.isPaid,
-          expiresAt: liveResult.expiresAt,
-          planType: liveResult.planType,
-          verifiedAt: Date.now(),
-          cacheMaxAgeHours: liveResult.cacheMaxAgeHours,
-        });
-      } catch {
-        // Persisting failed — still usable this session.
-      }
-    }
-
-    const decision = evaluateLicenseCache({
-      liveResult,
-      cached: stored.cached,
-      now: Date.now(),
-    });
-
-    if (decision.status === "allowed") return { status: "allowed" };
-    return { status: "blocked", deviceId: credentials.deviceId, reason: decision.reason };
+    return await verifyAndDecide(stored.credentials, stored.cached);
   } catch {
     // Truly unexpected failure (e.g. loadLicenseState itself rejecting) —
     // never leave the caller with a hung promise; report the safest
     // possible answer instead of crashing the app's only entry screen.
     return { status: "blocked", deviceId: "", reason: "no_network_no_cache" };
+  }
+}
+
+export async function submitRegistration(params: RegistrationParams): Promise<GateResult> {
+  try {
+    const stored = await loadLicenseState();
+
+    // Reuse a previously-generated-but-not-yet-registered device ID so a
+    // retry after a failed registration presents the same ID on future
+    // attempts, instead of a fresh one every time.
+    const deviceId = stored.pendingDeviceId ?? crypto.randomUUID();
+    if (!stored.pendingDeviceId) {
+      try {
+        await savePendingDeviceId(deviceId);
+      } catch {
+        // Persisting the pending ID failed — still usable for this
+        // attempt, just won't survive a restart before registration
+        // succeeds.
+      }
+    }
+
+    const registerResult = await registerDevice({
+      deviceId,
+      email: params.email,
+      username: params.username,
+      // submitRegistration only ever runs inside Tauri (see LicenseGate's
+      // isTauri() guard) — "desktop" is the only value this can be.
+      // appVersion comes from Tauri's own runtime API (the version
+      // declared in tauri.conf.json, the actual shipped build) rather than
+      // the JS package.json version, which is a separate number that
+      // isn't guaranteed to match it. appVersion is optional and purely
+      // informational for support, so a failed IPC call here must never
+      // turn into a lockout — swallow it.
+      platform: "desktop",
+      appVersion: await getVersion().catch(() => undefined),
+    });
+    if (!registerResult.ok) {
+      return { status: "registration_failed" };
+    }
+
+    const credentials: DeviceCredentials = {
+      deviceId: registerResult.deviceId,
+      apiKey: registerResult.apiKey,
+    };
+    try {
+      await saveCredentials(credentials);
+    } catch {
+      // Persisting failed — still usable this session; next launch will
+      // just register a new device.
+    }
+
+    return await verifyAndDecide(credentials, stored.cached);
+  } catch {
+    return { status: "registration_failed" };
   }
 }
