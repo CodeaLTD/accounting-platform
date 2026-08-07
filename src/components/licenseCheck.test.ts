@@ -3,7 +3,7 @@ import type { CachedLicense, DeviceCredentials } from "@/core/license/types";
 import { runLicenseCheck } from "./licenseCheck";
 
 const {
-  isTauriMock,
+  getVersionMock,
   registerDeviceMock,
   verifyLicenseMock,
   loadLicenseStateMock,
@@ -11,7 +11,7 @@ const {
   saveCachedLicenseMock,
   savePendingDeviceIdMock,
 } = vi.hoisted(() => ({
-  isTauriMock: vi.fn(() => true),
+  getVersionMock: vi.fn(() => Promise.resolve("0.1.0")),
   registerDeviceMock: vi.fn(),
   verifyLicenseMock: vi.fn(),
   loadLicenseStateMock: vi.fn(),
@@ -20,7 +20,7 @@ const {
   savePendingDeviceIdMock: vi.fn(),
 }));
 
-vi.mock("@tauri-apps/api/core", () => ({ isTauri: isTauriMock }));
+vi.mock("@tauri-apps/api/app", () => ({ getVersion: getVersionMock }));
 vi.mock("@/core/license/api", () => ({
   registerDevice: registerDeviceMock,
   verifyLicense: verifyLicenseMock,
@@ -46,7 +46,7 @@ const cached: CachedLicense = {
 
 describe("runLicenseCheck", () => {
   beforeEach(() => {
-    isTauriMock.mockReturnValue(true);
+    getVersionMock.mockResolvedValue("0.1.0");
     registerDeviceMock.mockReset();
     verifyLicenseMock.mockReset();
     loadLicenseStateMock.mockReset();
@@ -83,9 +83,11 @@ describe("runLicenseCheck", () => {
 
     const result = await runLicenseCheck();
 
-    expect(registerDeviceMock).toHaveBeenCalledWith(
-      expect.objectContaining({ deviceId: "new-device-id" }),
-    );
+    expect(registerDeviceMock).toHaveBeenCalledWith({
+      deviceId: "new-device-id",
+      platform: "desktop",
+      appVersion: "0.1.0",
+    });
     expect(saveCredentialsMock).toHaveBeenCalledWith({
       deviceId: "new-device-id",
       apiKey: "cda_new",

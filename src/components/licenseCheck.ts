@@ -1,5 +1,4 @@
-import { isTauri } from "@tauri-apps/api/core";
-import packageJson from "../../package.json";
+import { getVersion } from "@tauri-apps/api/app";
 import { registerDevice, verifyLicense } from "@/core/license/api";
 import { evaluateLicenseCache } from "@/core/license/cache";
 import type { DeviceCredentials, LicenseBlockReason } from "@/core/license/types";
@@ -36,8 +35,14 @@ export async function runLicenseCheck(): Promise<GateResult> {
 
       const registerResult = await registerDevice({
         deviceId,
-        platform: isTauri() ? "desktop" : undefined,
-        appVersion: packageJson.version,
+        // runLicenseCheck only ever runs inside Tauri (see LicenseGate's
+        // isTauri() guard before it's ever called) — "desktop" is the only
+        // value this can be. appVersion comes from Tauri's own runtime API
+        // (the version declared in tauri.conf.json, the actual shipped
+        // build) rather than the JS package.json version, which is a
+        // separate number that isn't guaranteed to match it.
+        platform: "desktop",
+        appVersion: await getVersion(),
       });
       if (!registerResult.ok) {
         return { status: "blocked", deviceId, reason: "registration_failed" };
