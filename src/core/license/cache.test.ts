@@ -97,4 +97,34 @@ describe("evaluateLicenseCache", () => {
       reason: "unpaid",
     });
   });
+
+  it("blocks with 'no_network_cache_expired' when verifiedAt is in the future (clock skew)", () => {
+    const liveResult: VerifyOutcome = { ok: false, reason: "network_error" };
+    // verifiedAt 1 hour ahead of "now" — cacheAgeMs would be negative.
+    const cached = cachedAt(-1);
+    expect(evaluateLicenseCache({ liveResult, cached, now: NOW })).toEqual({
+      status: "blocked",
+      reason: "no_network_cache_expired",
+    });
+  });
+
+  it("blocks with 'no_network_cache_expired' when the cached license's own expiresAt has passed, even within the fresh cache window", () => {
+    const liveResult: VerifyOutcome = { ok: false, reason: "network_error" };
+    const cached = cachedAt(1, { expiresAt: new Date(NOW - ONE_HOUR_MS).toISOString() });
+    expect(evaluateLicenseCache({ liveResult, cached, now: NOW })).toEqual({
+      status: "blocked",
+      reason: "no_network_cache_expired",
+    });
+  });
+
+  it("does not block on expiresAt when it is null (no expiry known)", () => {
+    const liveResult: VerifyOutcome = { ok: false, reason: "network_error" };
+    const cached = cachedAt(1, { expiresAt: null });
+    expect(evaluateLicenseCache({ liveResult, cached, now: NOW })).toEqual({
+      status: "allowed",
+      isPaid: true,
+      expiresAt: null,
+      planType: cached.planType,
+    });
+  });
 });

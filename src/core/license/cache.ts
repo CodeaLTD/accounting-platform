@@ -28,7 +28,18 @@ export function evaluateLicenseCache(params: {
 
   const cacheAgeMs = now - cached.verifiedAt;
   const maxAgeMs = cached.cacheMaxAgeHours * 60 * 60 * 1000;
-  if (cacheAgeMs >= maxAgeMs) {
+  // A negative age means verifiedAt is in the future relative to now — a
+  // clock was rolled back (or forward then back). Treat that the same as
+  // an expired cache rather than trusting it indefinitely, since we can no
+  // longer reason about how old the cached answer actually is.
+  if (cacheAgeMs < 0 || cacheAgeMs >= maxAgeMs) {
+    return { status: "blocked", reason: "no_network_cache_expired" };
+  }
+
+  // cacheMaxAgeHours only says how long the server's answer can be trusted
+  // offline — it doesn't mean the license itself hasn't since expired.
+  // Check the license's own expiresAt too, independent of cache freshness.
+  if (cached.expiresAt !== null && new Date(cached.expiresAt).getTime() <= now) {
     return { status: "blocked", reason: "no_network_cache_expired" };
   }
 
