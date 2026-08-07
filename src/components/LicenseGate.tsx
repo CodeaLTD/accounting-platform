@@ -3,13 +3,14 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 import { MESSAGES } from "@/app/messages";
+import type { LicenseBlockReason } from "@/core/license/types";
 import { LicenseLockedScreen } from "./LicenseLockedScreen";
 import { runLicenseCheck } from "./licenseCheck";
 
 type GateState =
   | { phase: "checking" }
   | { phase: "allowed" }
-  | { phase: "blocked"; deviceId: string };
+  | { phase: "blocked"; deviceId: string; reason: LicenseBlockReason };
 
 interface LicenseGateProps {
   children: React.ReactNode;
@@ -29,13 +30,17 @@ export function LicenseGate({ children }: LicenseGateProps) {
   // Runs the async check and applies its result — no synchronous setState
   // here, so this is safe to call directly from the mount effect below.
   const runCheck = useCallback(() => {
-    runLicenseCheck().then((result) => {
-      setState(
-        result.status === "allowed"
-          ? { phase: "allowed" }
-          : { phase: "blocked", deviceId: result.deviceId },
-      );
-    });
+    runLicenseCheck()
+      .then((result) => {
+        setState(
+          result.status === "allowed"
+            ? { phase: "allowed" }
+            : { phase: "blocked", deviceId: result.deviceId, reason: result.reason },
+        );
+      })
+      .catch(() => {
+        setState({ phase: "blocked", deviceId: "", reason: "no_network_no_cache" });
+      });
   }, []);
 
   // The retry button needs to flip back to "checking" before re-running —
@@ -63,7 +68,7 @@ export function LicenseGate({ children }: LicenseGateProps) {
     return <p className="p-8">{MESSAGES.license.checkingMessage}</p>;
   }
   if (state.phase === "blocked") {
-    return <LicenseLockedScreen deviceId={state.deviceId} onRetry={retry} />;
+    return <LicenseLockedScreen deviceId={state.deviceId} reason={state.reason} onRetry={retry} />;
   }
   return <>{children}</>;
 }

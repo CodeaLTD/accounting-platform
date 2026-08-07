@@ -9,6 +9,7 @@ const {
   loadLicenseStateMock,
   saveCredentialsMock,
   saveCachedLicenseMock,
+  savePendingDeviceIdMock,
 } = vi.hoisted(() => ({
   isTauriMock: vi.fn(() => true),
   registerDeviceMock: vi.fn(),
@@ -16,6 +17,7 @@ const {
   loadLicenseStateMock: vi.fn(),
   saveCredentialsMock: vi.fn(),
   saveCachedLicenseMock: vi.fn(),
+  savePendingDeviceIdMock: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: isTauriMock }));
@@ -27,6 +29,7 @@ vi.mock("@/platform/license", () => ({
   loadLicenseState: loadLicenseStateMock,
   saveCredentials: saveCredentialsMock,
   saveCachedLicense: saveCachedLicenseMock,
+  savePendingDeviceId: savePendingDeviceIdMock,
 }));
 
 const credentials: DeviceCredentials = {
@@ -49,6 +52,7 @@ describe("runLicenseCheck", () => {
     loadLicenseStateMock.mockReset();
     saveCredentialsMock.mockReset();
     saveCachedLicenseMock.mockReset();
+    savePendingDeviceIdMock.mockReset();
     vi.stubGlobal("crypto", { randomUUID: () => "new-device-id" });
   });
 
@@ -59,7 +63,11 @@ describe("runLicenseCheck", () => {
   });
 
   it("registers a new device when no credentials are stored, then verifies", async () => {
-    loadLicenseStateMock.mockResolvedValue({ credentials: null, cached: null });
+    loadLicenseStateMock.mockResolvedValue({
+      credentials: null,
+      cached: null,
+      pendingDeviceId: null,
+    });
     registerDeviceMock.mockResolvedValue({
       ok: true,
       deviceId: "new-device-id",
@@ -86,7 +94,11 @@ describe("runLicenseCheck", () => {
   });
 
   it("blocks with 'registration_failed' when registration fails", async () => {
-    loadLicenseStateMock.mockResolvedValue({ credentials: null, cached: null });
+    loadLicenseStateMock.mockResolvedValue({
+      credentials: null,
+      cached: null,
+      pendingDeviceId: null,
+    });
     registerDeviceMock.mockResolvedValue({ ok: false, reason: "network_error" });
 
     const result = await runLicenseCheck();
@@ -100,7 +112,11 @@ describe("runLicenseCheck", () => {
   });
 
   it("skips registration and verifies directly when credentials are already stored", async () => {
-    loadLicenseStateMock.mockResolvedValue({ credentials, cached: null });
+    loadLicenseStateMock.mockResolvedValue({
+      credentials,
+      cached: null,
+      pendingDeviceId: null,
+    });
     verifyLicenseMock.mockResolvedValue({
       ok: true,
       isPaid: true,
@@ -117,7 +133,11 @@ describe("runLicenseCheck", () => {
   });
 
   it("persists a fresh cache entry whenever the live verify call succeeds", async () => {
-    loadLicenseStateMock.mockResolvedValue({ credentials, cached: null });
+    loadLicenseStateMock.mockResolvedValue({
+      credentials,
+      cached: null,
+      pendingDeviceId: null,
+    });
     verifyLicenseMock.mockResolvedValue({
       ok: true,
       isPaid: false,
@@ -141,7 +161,7 @@ describe("runLicenseCheck", () => {
   it("falls back to a cached allowed result on a network error within the cache window", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(cached.verifiedAt + 60 * 60 * 1000); // 1h later, well within 24h
-    loadLicenseStateMock.mockResolvedValue({ credentials, cached });
+    loadLicenseStateMock.mockResolvedValue({ credentials, cached, pendingDeviceId: null });
     verifyLicenseMock.mockResolvedValue({ ok: false, reason: "network_error" });
 
     const result = await runLicenseCheck();
@@ -151,7 +171,7 @@ describe("runLicenseCheck", () => {
   });
 
   it("blocks with 'invalid_credentials' on a 401, even with a valid cache", async () => {
-    loadLicenseStateMock.mockResolvedValue({ credentials, cached });
+    loadLicenseStateMock.mockResolvedValue({ credentials, cached, pendingDeviceId: null });
     verifyLicenseMock.mockResolvedValue({ ok: false, reason: "invalid_credentials" });
 
     const result = await runLicenseCheck();
@@ -160,6 +180,50 @@ describe("runLicenseCheck", () => {
       status: "blocked",
       deviceId: "existing-device",
       reason: "invalid_credentials",
+    });
+  });
+
+  it("reuses a previously-persisted pending device ID instead of generating a new one", async () => {
+    loadLicenseStateMock.mockResolvedValue({
+      credentials: null,
+      cached: null,
+      pendingDeviceId: "already-pending-id",
+    });
+    registerDeviceMock.mockResolvedValue({ ok: false, reason: "network_error" });
+
+    const result = await runLicenseCheck();
+
+    expect(registerDeviceMock).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: "already-pending-id" }),
+    );
+    expect(savePendingDeviceIdMock).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      status: "blocked",
+      deviceId: "already-pending-id",
+      reason: "registration_failed",
+    });
+  });
+
+  it("persists a newly-generated device ID before attempting registration", async () => {
+    loadLicenseStateMock.mockResolvedValue({
+      credentials: null,
+      cached: null,
+      pendingDeviceId: null,
+    });
+    registerDeviceMock.mockResolvedValue({ ok: false, reason: "network_error" });
+
+    await runLicenseCheck();
+
+    expect(savePendingDeviceIdMock).toHaveBeenCalledWith("new-device-id");
+  });
+
+  it("returns a blocked result instead of rejecting when loadLicenseState itself throws", async () => {
+    loadLicenseStateMock.mockRejectedValue(new Error("disk error"));
+
+    await expect(runLicenseCheck()).resolves.toEqual({
+      status: "blocked",
+      deviceId: "",
+      reason: "no_network_no_cache",
     });
   });
 });
