@@ -22,14 +22,23 @@ describe("LicenseGate", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders children immediately outside Tauri, without calling runLicenseCheck", () => {
+  it("shows checking briefly, then renders children outside Tauri without calling runLicenseCheck", async () => {
     isTauriMock.mockReturnValue(false);
     render(
       <LicenseGate>
         <p>App content</p>
       </LicenseGate>,
     );
-    expect(screen.getByText("App content")).toBeInTheDocument();
+
+    // The very first render (matching what a server/prerender pass would
+    // produce) is always "checking", regardless of isTauri() — see the
+    // comment in LicenseGate.tsx on why that value can't be read
+    // synchronously during render without risking a hydration mismatch.
+    expect(screen.getByText(MESSAGES.license.checkingMessage)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.getByText("App content")).toBeInTheDocument();
+    });
     expect(runLicenseCheckMock).not.toHaveBeenCalled();
   });
 
