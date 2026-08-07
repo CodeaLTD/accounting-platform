@@ -23,9 +23,10 @@ export function LicenseGate({ children }: LicenseGateProps) {
     isTauri() ? { phase: "checking" } : { phase: "allowed" },
   );
 
-  const check = useCallback(() => {
+  // Runs the async check and applies its result — no synchronous setState
+  // here, so this is safe to call directly from the mount effect below.
+  const runCheck = useCallback(() => {
     if (!isTauri()) return;
-    setState({ phase: "checking" });
     runLicenseCheck().then((result) => {
       setState(
         result.status === "allowed"
@@ -35,15 +36,24 @@ export function LicenseGate({ children }: LicenseGateProps) {
     });
   }, []);
 
+  // The retry button needs to flip back to "checking" before re-running —
+  // that setState belongs in this event handler, not the mount effect
+  // below, which must not call setState synchronously in its body.
+  const retry = useCallback(() => {
+    if (!isTauri()) return;
+    setState({ phase: "checking" });
+    runCheck();
+  }, [runCheck]);
+
   useEffect(() => {
-    check();
-  }, [check]);
+    runCheck();
+  }, [runCheck]);
 
   if (state.phase === "checking") {
     return <p className="p-8">{MESSAGES.license.checkingMessage}</p>;
   }
   if (state.phase === "blocked") {
-    return <LicenseLockedScreen deviceId={state.deviceId} onRetry={check} />;
+    return <LicenseLockedScreen deviceId={state.deviceId} onRetry={retry} />;
   }
   return <>{children}</>;
 }
