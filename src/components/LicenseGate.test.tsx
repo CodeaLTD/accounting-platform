@@ -77,15 +77,20 @@ describe("LicenseGate", () => {
     expect(screen.queryByText("App content")).not.toBeInTheDocument();
   });
 
-  it("re-runs the check when the retry button is clicked", async () => {
+  it("re-runs the check when the retry button is clicked, showing checking again first", async () => {
     const user = userEvent.setup();
+    let resolveRetryCheck: (value: { status: "allowed" }) => void;
     runLicenseCheckMock
       .mockResolvedValueOnce({
         status: "blocked",
         deviceId: "A1B2-C3D4",
         reason: "unpaid",
       })
-      .mockResolvedValueOnce({ status: "allowed" });
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveRetryCheck = resolve;
+        }),
+      );
 
     render(
       <LicenseGate>
@@ -103,6 +108,13 @@ describe("LicenseGate", () => {
       screen.getByRole("button", { name: MESSAGES.license.retryButton }),
     );
 
+    // Retry's synchronous setState back to "checking" must fire before the
+    // re-run's result comes back — asserted here so a regression that drops
+    // that setState (e.g. collapsing retry back into runCheck) gets caught,
+    // instead of only checking the eventual allowed/blocked outcome.
+    expect(screen.getByText(MESSAGES.license.checkingMessage)).toBeInTheDocument();
+
+    resolveRetryCheck!({ status: "allowed" });
     await waitFor(() => {
       expect(screen.getByText("App content")).toBeInTheDocument();
     });
